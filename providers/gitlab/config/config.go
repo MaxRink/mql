@@ -21,7 +21,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "gitlab",
-			Use:   "gitlab",
+			Use:   "gitlab --group <group> [--project <project>] [--token <token>]",
 			Short: "a GitLab group or project",
 			Long: `Use the gitlab provider to query resources within GitLab groups and projects.
 

@@ -25,7 +25,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "atlassian",
-			Use:   "atlassian",
+			Use:   "atlassian [admin|jira|confluence|scim] [--host <host>] [--user <user>] [--user-token <token>]",
 			Short: "an Atlassian Cloud Jira, Confluence or Bitbucket instance",
 			Long: `Use the atlassian provider to query resources within Atlassian Cloud, including Jira, Confluence, and SCIM.
 

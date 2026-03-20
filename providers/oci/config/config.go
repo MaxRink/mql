@@ -17,7 +17,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "oci",
-			Use:   "oci",
+			Use:   "oci [--tenancy <ocid>] [--user <ocid>] [--region <region>] [--profile <profile>]",
 			Short: "an Oracle Cloud Infrastructure tenancy",
 			Long: `Use the oci provider to query resources in an Oracle Cloud Infrastructure tenancy, including compute instances, networks, storage, and identity resources.
 

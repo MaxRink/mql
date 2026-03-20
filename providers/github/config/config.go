@@ -18,7 +18,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "github",
-			Use:   "github",
+			Use:   "github org|repo <name> [--token <token>]",
 			Short: "a GitHub organization or repository",
 			Long: `Use the github provider to query resources within GitHub organizations and repositories.
 

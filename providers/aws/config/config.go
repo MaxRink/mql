@@ -19,7 +19,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "aws",
-			Use:   "aws",
+			Use:   "aws [--profile <profile>] [--region <region>] [--role <role>]",
 			Short: "an AWS account",
 			Long: `Use the aws provider to query the resources in an AWS account.
 

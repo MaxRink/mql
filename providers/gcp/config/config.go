@@ -22,7 +22,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "gcp",
-			Use:   "gcp",
+			Use:   "gcp [--project-id <id>] [--credentials-path <path>] [--zone <zone>]",
 			Short: "a Google Cloud project or folder",
 			Long: `Use the gcp provider to query resources within Google Cloud Platform (GCP), including databases, services, instances, containers, and more.
 

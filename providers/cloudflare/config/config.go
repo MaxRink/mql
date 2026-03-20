@@ -16,7 +16,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "cloudflare",
-			Use:   "cloudflare",
+			Use:   "cloudflare [--token <token>]",
 			Short: "a Cloudflare account",
 			Long: `Use the cloudflare provider to query resources in your Cloudflare account, including zones, DNS records, and account settings.
 

@@ -18,7 +18,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "tailscale",
-			Use:   "tailscale",
+			Use:   "tailscale [tailnet] [--token <token>] [--client-id <id>] [--client-secret <secret>]",
 			Short: "a Tailscale network",
 			// The tailnet organization name. e.g. example.com
 			MinArgs: 0,

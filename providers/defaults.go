@@ -64,7 +64,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "atlassian",
-					Use:   "atlassian",
+					Use:   "atlassian [admin|jira|confluence|scim] [--host <host>] [--user <user>] [--user-token <token>]",
 					Short: "an Atlassian Cloud Jira, Confluence or Bitbucket instance",
 				},
 			},
@@ -109,7 +109,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "azure",
-					Use:   "azure",
+					Use:   "azure [--tenant-id <id>] [--client-id <id>] [--client-secret <secret>] [--subscriptions <ids>]",
 					Short: "an Azure subscription",
 				},
 			},
@@ -124,7 +124,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "cloudflare",
-					Use:   "cloudflare",
+					Use:   "cloudflare [--token <token>]",
 					Short: "a Cloudflare account",
 				},
 			},
@@ -193,7 +193,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "gcp",
-					Use:   "gcp",
+					Use:   "gcp [--project-id <id>] [--credentials-path <path>] [--zone <zone>]",
 					Short: "a Google Cloud project or folder",
 				},
 			},
@@ -208,7 +208,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "github",
-					Use:   "github",
+					Use:   "github org|repo <name> [--token <token>]",
 					Short: "a GitHub organization or repository",
 				},
 			},
@@ -223,7 +223,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "gitlab",
-					Use:   "gitlab",
+					Use:   "gitlab --group <group> [--project <project>] [--token <token>]",
 					Short: "a GitLab group or project",
 				},
 			},
@@ -328,7 +328,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "ms365",
-					Use:   "ms365",
+					Use:   "ms365 [--tenant-id <id>] [--client-id <id>] [--certificate-path <path>]",
 					Short: "a Microsoft 365 tenant",
 				},
 			},
@@ -358,7 +358,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "nmap",
-					Use:   "nmap",
+					Use:   "nmap [host|domain] [--networks <ranges>] [--ports <ports>]",
 					Short: "a Nmap network scanner",
 				},
 			},
@@ -373,7 +373,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "oci",
-					Use:   "oci",
+					Use:   "oci [--tenancy <ocid>] [--user <ocid>] [--region <region>] [--profile <profile>]",
 					Short: "an Oracle Cloud Infrastructure tenancy",
 				},
 			},
@@ -388,7 +388,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "okta",
-					Use:   "okta",
+					Use:   "okta [--organization <domain>] [--token <token>]",
 					Short: "an Okta organization",
 				},
 			},
@@ -475,7 +475,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "shodan",
-					Use:   "shodan",
+					Use:   "shodan [host|domain] [--token <token>] [--networks <ranges>]",
 					Short: "a Shodan account",
 				},
 			},
@@ -490,7 +490,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "slack",
-					Use:   "slack",
+					Use:   "slack [--token <token>] [--team-id <id>]",
 					Short: "a Slack team",
 				},
 			},
@@ -505,7 +505,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "snowflake",
-					Use:   "snowflake",
+					Use:   "snowflake [--account <id>] [--region <region>] [--user <user>] [--role <role>] [--identity-file <path>]",
 					Short: "a Snowflake account",
 				},
 			},
@@ -520,7 +520,7 @@ var DefaultProviders Providers = map[string]*Provider{
 			Connectors: []plugin.Connector{
 				{
 					Name:  "tailscale",
-					Use:   "tailscale",
+					Use:   "tailscale [tailnet] [--token <token>] [--client-id <id>] [--client-secret <secret>]",
 					Short: "a Tailscale network",
 				},
 			},

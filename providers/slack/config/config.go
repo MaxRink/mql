@@ -17,7 +17,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "slack",
-			Use:   "slack",
+			Use:   "slack [--token <token>] [--team-id <id>]",
 			Short: "a Slack team",
 			Long: `Use the slack provider to query resources in a Slack team.
 

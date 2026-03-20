@@ -18,7 +18,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "shodan",
-			Use:   "shodan",
+			Use:   "shodan [host|domain] [--token <token>] [--networks <ranges>]",
 			Short: "a Shodan account",
 			Long: `Use the shodan provider to query domain and IP security information in the Shodan search engine.
 

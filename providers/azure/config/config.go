@@ -22,7 +22,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "azure",
-			Use:   "azure",
+			Use:   "azure [--tenant-id <id>] [--client-id <id>] [--client-secret <secret>] [--subscriptions <ids>]",
 			Short: "an Azure subscription",
 			Long: `Use the azure provider to query resources within Microsoft Azure, including storage, compute instances, snapshots, databases, and more.
 

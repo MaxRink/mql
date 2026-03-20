@@ -16,7 +16,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "snowflake",
-			Use:   "snowflake",
+			Use:   "snowflake [--account <id>] [--region <region>] [--user <user>] [--role <role>] [--identity-file <path>]",
 			Short: "a Snowflake account",
 			Long: `Use the snowflake provider to query a Snowflake account.
 

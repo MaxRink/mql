@@ -18,7 +18,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "nmap",
-			Use:   "nmap",
+			Use:   "nmap [host|domain] [--networks <ranges>] [--ports <ports>]",
 			Short: "a Nmap network scanner",
 			Long: `Use the nmap provider to query network information using the Nmap network scanner, including open ports, services, and host information.
 

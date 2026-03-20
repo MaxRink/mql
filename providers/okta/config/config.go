@@ -17,7 +17,7 @@ var Config = plugin.Provider{
 	Connectors: []plugin.Connector{
 		{
 			Name:  "okta",
-			Use:   "okta",
+			Use:   "okta [--organization <domain>] [--token <token>]",
 			Short: "an Okta organization",
 			Long: `Use the okta provider to query resources in an Okta organization.
 
