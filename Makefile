@@ -205,6 +205,7 @@ PROVIDERS := \
 	cloudformation \
 	depsdev \
 	equinix \
+	firebase \
 	gcp \
 	github \
 	gitlab \
