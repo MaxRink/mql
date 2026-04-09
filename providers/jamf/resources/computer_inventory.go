@@ -6,10 +6,24 @@ package resources
 import (
 	"errors"
 	"net/url"
+	"time"
 
 	"go.mondoo.com/mql/v13/llx"
 	"go.mondoo.com/mql/v13/providers/jamf/connection"
 )
+
+// parseJamfTime parses a Jamf Pro API date string (ISO 8601 / RFC 3339).
+// Returns zero time if the string is empty or unparseable.
+func parseJamfTime(s string) *time.Time {
+	if s == "" {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
 
 func (r *mqlJamf) computerInventory() ([]interface{}, error) {
 	conn := r.MqlRuntime.Connection.(*connection.JamfConnection)
@@ -39,10 +53,10 @@ func (r *mqlJamf) computerInventory() ([]interface{}, error) {
 			"lastReportedIp":                       llx.StringData(c.General.LastReportedIp),
 			"jamfBinaryVersion":                    llx.StringData(c.General.JamfBinaryVersion),
 			"platform":                             llx.StringData(c.General.Platform),
-			"reportDate":                           llx.StringData(c.General.ReportDate),
-			"lastContactTime":                      llx.StringData(c.General.LastContactTime),
-			"lastEnrolledDate":                     llx.StringData(c.General.LastEnrolledDate),
-			"initialEntryDate":                     llx.StringData(c.General.InitialEntryDate),
+			"reportDate":                           llx.TimeDataPtr(parseJamfTime(c.General.ReportDate)),
+			"lastContactTime":                      llx.TimeDataPtr(parseJamfTime(c.General.LastContactTime)),
+			"lastEnrolledDate":                     llx.TimeDataPtr(parseJamfTime(c.General.LastEnrolledDate)),
+			"initialEntryDate":                     llx.TimeDataPtr(parseJamfTime(c.General.InitialEntryDate)),
 			"itunesStoreAccountActive":             llx.BoolData(c.General.ItunesStoreAccountActive),
 			"enrolledViaAutomatedDeviceEnrollment": llx.BoolData(c.General.EnrolledViaAutomatedDeviceEnrollment),
 			"fileVault2Enabled":                    llx.StringData(c.OperatingSystem.FileVault2Status),

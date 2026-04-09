@@ -7,6 +7,7 @@ package resources
 
 import (
 	"errors"
+	"time"
 
 	"go.mondoo.com/mql/v13/llx"
 	"go.mondoo.com/mql/v13/providers-sdk/v1/plugin"
@@ -232,16 +233,16 @@ var getDataFields = map[string]func(r plugin.Resource) *plugin.DataRes{
 		return (r.(*mqlJamfComputer).GetPlatform()).ToDataRes(types.String)
 	},
 	"jamfComputer.reportDate": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfComputer).GetReportDate()).ToDataRes(types.String)
+		return (r.(*mqlJamfComputer).GetReportDate()).ToDataRes(types.Time)
 	},
 	"jamfComputer.lastContactTime": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfComputer).GetLastContactTime()).ToDataRes(types.String)
+		return (r.(*mqlJamfComputer).GetLastContactTime()).ToDataRes(types.Time)
 	},
 	"jamfComputer.lastEnrolledDate": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfComputer).GetLastEnrolledDate()).ToDataRes(types.String)
+		return (r.(*mqlJamfComputer).GetLastEnrolledDate()).ToDataRes(types.Time)
 	},
 	"jamfComputer.initialEntryDate": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfComputer).GetInitialEntryDate()).ToDataRes(types.String)
+		return (r.(*mqlJamfComputer).GetInitialEntryDate()).ToDataRes(types.Time)
 	},
 	"jamfComputer.itunesStoreAccountActive": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetItunesStoreAccountActive()).ToDataRes(types.Bool)
@@ -527,19 +528,19 @@ var setDataFields = map[string]func(r plugin.Resource, v *llx.RawData) bool{
 		return
 	},
 	"jamfComputer.reportDate": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfComputer).ReportDate, ok = plugin.RawToTValue[string](v.Value, v.Error)
+		r.(*mqlJamfComputer).ReportDate, ok = plugin.RawToTValue[*time.Time](v.Value, v.Error)
 		return
 	},
 	"jamfComputer.lastContactTime": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfComputer).LastContactTime, ok = plugin.RawToTValue[string](v.Value, v.Error)
+		r.(*mqlJamfComputer).LastContactTime, ok = plugin.RawToTValue[*time.Time](v.Value, v.Error)
 		return
 	},
 	"jamfComputer.lastEnrolledDate": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfComputer).LastEnrolledDate, ok = plugin.RawToTValue[string](v.Value, v.Error)
+		r.(*mqlJamfComputer).LastEnrolledDate, ok = plugin.RawToTValue[*time.Time](v.Value, v.Error)
 		return
 	},
 	"jamfComputer.initialEntryDate": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfComputer).InitialEntryDate, ok = plugin.RawToTValue[string](v.Value, v.Error)
+		r.(*mqlJamfComputer).InitialEntryDate, ok = plugin.RawToTValue[*time.Time](v.Value, v.Error)
 		return
 	},
 	"jamfComputer.itunesStoreAccountActive": func(r plugin.Resource, v *llx.RawData) (ok bool) {
@@ -1043,10 +1044,10 @@ type mqlJamfComputer struct {
 	LastReportedIp                       plugin.TValue[string]
 	JamfBinaryVersion                    plugin.TValue[string]
 	Platform                             plugin.TValue[string]
-	ReportDate                           plugin.TValue[string]
-	LastContactTime                      plugin.TValue[string]
-	LastEnrolledDate                     plugin.TValue[string]
-	InitialEntryDate                     plugin.TValue[string]
+	ReportDate                           plugin.TValue[*time.Time]
+	LastContactTime                      plugin.TValue[*time.Time]
+	LastEnrolledDate                     plugin.TValue[*time.Time]
+	InitialEntryDate                     plugin.TValue[*time.Time]
 	ItunesStoreAccountActive             plugin.TValue[bool]
 	EnrolledViaAutomatedDeviceEnrollment plugin.TValue[bool]
 	FileVault2Enabled                    plugin.TValue[string]
@@ -1157,19 +1158,19 @@ func (c *mqlJamfComputer) GetPlatform() *plugin.TValue[string] {
 	return &c.Platform
 }
 
-func (c *mqlJamfComputer) GetReportDate() *plugin.TValue[string] {
+func (c *mqlJamfComputer) GetReportDate() *plugin.TValue[*time.Time] {
 	return &c.ReportDate
 }
 
-func (c *mqlJamfComputer) GetLastContactTime() *plugin.TValue[string] {
+func (c *mqlJamfComputer) GetLastContactTime() *plugin.TValue[*time.Time] {
 	return &c.LastContactTime
 }
 
-func (c *mqlJamfComputer) GetLastEnrolledDate() *plugin.TValue[string] {
+func (c *mqlJamfComputer) GetLastEnrolledDate() *plugin.TValue[*time.Time] {
 	return &c.LastEnrolledDate
 }
 
-func (c *mqlJamfComputer) GetInitialEntryDate() *plugin.TValue[string] {
+func (c *mqlJamfComputer) GetInitialEntryDate() *plugin.TValue[*time.Time] {
 	return &c.InitialEntryDate
 }
 

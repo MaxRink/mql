@@ -118,16 +118,16 @@ private jamfComputer @defaults("name platform") {
   platform string
 
   // Date of last inventory report
-  reportDate string
+  reportDate time
 
   // Timestamp of last contact with Jamf
-  lastContactTime string
+  lastContactTime time
 
   // Enrollment date in Jamf
-  lastEnrolledDate string
+  lastEnrolledDate time
 
   // Initial entry date into the Jamf system
-  initialEntryDate string
+  initialEntryDate time
 
   // Whether iTunes Store account is active
   itunesStoreAccountActive bool
