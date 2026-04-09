@@ -1,0 +1,42 @@
+// Copyright (c) Mondoo, Inc.
+// SPDX-License-Identifier: BUSL-1.1
+
+package resources
+
+import (
+	"errors"
+
+	"go.mondoo.com/mql/v13/llx"
+	"go.mondoo.com/mql/v13/providers-sdk/v1/plugin"
+	"go.mondoo.com/mql/v13/providers/jamf/connection"
+)
+
+func initJamfUserByName(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error) {
+	nameArg, ok := args["name"]
+	if !ok || nameArg.Value == nil {
+		return nil, nil, errors.New("missing required argument: name")
+	}
+	name := nameArg.Value.(string)
+
+	conn := runtime.Connection.(*connection.JamfConnection)
+	client := conn.Client
+
+	user, err := client.GetUserByName(name)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	args["id"] = llx.IntData(user.ID)
+	args["name"] = llx.StringData(user.Name)
+	args["fullName"] = llx.StringData(user.FullName)
+	args["email"] = llx.StringData(user.Email)
+	args["phone"] = llx.StringData(user.PhoneNumber)
+	args["position"] = llx.StringData(user.Position)
+	args["enableCustomPhoto"] = llx.BoolData(user.EnableCustomPhoto)
+
+	res, err := CreateResource(runtime, "jamf.userByName", args)
+	if err != nil {
+		return nil, nil, err
+	}
+	return args, res, nil
+}

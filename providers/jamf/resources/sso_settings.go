@@ -1,0 +1,42 @@
+// Copyright (c) Mondoo, Inc.
+// SPDX-License-Identifier: BUSL-1.1
+
+package resources
+
+import (
+	"go.mondoo.com/mql/v13/llx"
+	"go.mondoo.com/mql/v13/providers/jamf/connection"
+)
+
+func (r *mqlJamf) sso() (*mqlSsoSettings, error) {
+	conn := r.MqlRuntime.Connection.(*connection.JamfConnection)
+	client := conn.Client
+
+	info, err := client.GetSsoSettings()
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := CreateResource(r.MqlRuntime, "ssoSettings", map[string]*llx.RawData{
+		"SsoEnabled":                                     llx.BoolData(info.SsoEnabled),
+		"SsoForEnrollmentEnabled":                        llx.BoolData(info.SsoForEnrollmentEnabled),
+		"SsoBypassAllowed":                               llx.BoolData(info.SsoBypassAllowed),
+		"SessionTimeout":                                 llx.IntData(info.SessionTimeout),
+		"SsoForMacOsSelfServiceEnabled":                  llx.BoolData(info.SsoForMacOsSelfServiceEnabled),
+		"TokenExpirationDisabled":                        llx.BoolData(info.TokenExpirationDisabled),
+		"UserAttributeEnabled":                           llx.BoolData(info.UserAttributeEnabled),
+		"UserAttributeName":                              llx.StringData(info.UserAttributeName),
+		"UserMapping":                                    llx.StringData(info.UserMapping),
+		"EnrollmentSsoForAccountDrivenEnrollmentEnabled": llx.BoolData(info.EnrollmentSsoForAccountDrivenEnrollmentEnabled),
+		"IdpUrl":                       llx.StringData(info.IdpUrl),
+		"IdpProviderType":              llx.StringData(info.IdpProviderType),
+		"GroupEnrollmentAccessEnabled": llx.BoolData(info.GroupEnrollmentAccessEnabled),
+		"GroupAttributeName":           llx.StringData(info.GroupAttributeName),
+		"EntityId":                     llx.StringData(info.EntityId),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return res.(*mqlSsoSettings), nil
+}

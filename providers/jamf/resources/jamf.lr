@@ -1,0 +1,266 @@
+// Copyright (c) Mondoo, Inc.
+// SPDX-License-Identifier: BUSL-1.1
+
+option provider = "go.mondoo.com/cnquery/v9/providers/jamf"
+option go_package = "go.mondoo.com/mql/v13/providers/jamf/resources"
+
+// Gather Jamf Pro Information
+jamf {
+  // Retrieve a list of all computers in the Jamf Pro inventory
+  computerInventory() []jamfComputer
+
+  // Return the total number of computer inventory records
+  computerInventoryCount() int
+
+  // Retrieve a list of all software packages configured in Jamf Pro
+  packages() []jamfPackages
+
+  // Retrieve current SSO configuration settings
+  sso() ssoSettings
+
+  // Retrieve the Jamf Pro version string
+  version() string
+
+  // Retrieve a list of all user accounts configured in Jamf Pro
+  users() []jamfUsers
+
+  // Retrieve a list of computer smart groups
+  smartGroups() []computerGroups
+}
+
+// Retrieve a Jamf user by their username
+jamf.userByName @defaults("name email fullName") {
+  // Initialize the resource using the username
+  init(name string)
+
+  // Unique ID of the user
+  id int
+
+  // Jamf username
+  name string
+
+  // Full name of the user
+  fullName string
+
+  // Email address of the user
+  email string
+
+  // Phone number associated with the user
+  phone string
+
+  // Job position of the user
+  position string
+
+  // Indicates whether the user has a custom photo enabled
+  enableCustomPhoto bool
+}
+
+// Jamf smart or static computer group
+private computerGroups @defaults("name smartGroup") {
+  // Group ID
+  id int
+
+  // Group name
+  name string
+
+  // Whether the group is a smart group
+  smartGroup bool
+}
+
+// Jamf Pro Computer Inventory record
+private jamfComputer @defaults("name platform") {
+  // Computer ID
+  id string
+
+  // Computer name
+  name string
+
+  // Manufacturer (e.g., Apple)
+  make string
+
+  // Model name (e.g., MacBook Pro)
+  model string
+
+  // Operating system name (e.g., macOS)
+  operatingSystemName string
+
+  // OS version installed
+  operatingSystemVersion string
+
+  // MAC address of the computer
+  macAddress string
+
+  // Serial number of the device
+  serialNumber string
+
+  // Type of processor (e.g., Apple M1, Intel i5)
+  processorType string
+
+  // Number of processors
+  processorCount int
+
+  // Total number of processor cores
+  coreCount int
+
+  // Total RAM in MB
+  totalRamMegabytes int
+
+  // Last known IP address
+  lastIpAddress string
+
+  // Last reported IP address
+  lastReportedIp string
+
+  // Version of the Jamf binary installed
+  jamfBinaryVersion string
+
+  // Platform identifier (e.g., Mac, iOS)
+  platform string
+
+  // Date of last inventory report
+  reportDate string
+
+  // Timestamp of last contact with Jamf
+  lastContactTime string
+
+  // Enrollment date in Jamf
+  lastEnrolledDate string
+
+  // Initial entry date into the Jamf system
+  initialEntryDate string
+
+  // Whether iTunes Store account is active
+  itunesStoreAccountActive bool
+
+  // Indicates if enrolled via Automated Device Enrollment
+  enrolledViaAutomatedDeviceEnrollment bool
+
+  // Status of FileVault 2 encryption
+  fileVault2Enabled string
+
+  // Whether auto-login is disabled
+  autoLoginDisabled bool
+
+  // Whether activation lock is enabled
+  activationLockEnabled bool
+
+  // Whether the firewall is enabled
+  firewallEnabled bool
+
+  // List of local user accounts on the computer
+  localUserAccounts() []jamfLocalUserAccount
+}
+
+// Local user account information for Jamf-managed computers
+private jamfLocalUserAccount @defaults("username") {
+  // System UID of the user
+  uid string
+
+  // Username of the account
+  username string
+
+  // Full name of the account owner
+  fullName string
+
+  // Whether the account has admin privileges
+  admin bool
+
+  // Whether FileVault2 is enabled for this account
+  fileVault2Enabled bool
+
+  // Type of user account (e.g., Standard, Admin)
+  userAccountType string
+
+  // Maximum password age in days
+  passwordMaxAge int
+
+  // Home directory path of the user
+  homeDirectory string
+
+  // Minimum password length
+  passwordMinLength int
+
+  // Minimum number of complex characters in password
+  passwordMinComplexCharacters int
+}
+
+// Single Sign-On (SSO) settings for Jamf Pro
+private ssoSettings @defaults("SsoEnabled") {
+  // Whether SSO is enabled
+  SsoEnabled bool
+
+  // Whether SSO is enabled for enrollment
+  SsoForEnrollmentEnabled bool
+
+  // Whether bypassing SSO is allowed
+  SsoBypassAllowed bool
+
+  // Session timeout in minutes
+  SessionTimeout int
+
+  // Whether SSO is enabled for macOS Self Service
+  SsoForMacOsSelfServiceEnabled bool
+
+  // Whether token expiration is disabled
+  TokenExpirationDisabled bool
+
+  // Whether user attribute is enabled
+  UserAttributeEnabled bool
+
+  // Name of the user attribute used
+  UserAttributeName string
+
+  // User mapping details
+  UserMapping string
+
+  // Whether account-driven enrollment uses SSO
+  EnrollmentSsoForAccountDrivenEnrollmentEnabled bool
+
+  // Identity provider URL
+  IdpUrl string
+
+  // Type of identity provider (e.g., Azure, Google)
+  IdpProviderType string
+
+  // Whether group enrollment access is enabled
+  GroupEnrollmentAccessEnabled bool
+
+  // Name of the group attribute used
+  GroupAttributeName string
+
+  // Entity ID for the SSO provider
+  EntityId string
+}
+
+// Jamf Pro user summary
+private jamfUsers @defaults("name") {
+  // User ID
+  id int
+
+  // Username
+  name string
+}
+
+// Jamf Pro package definition
+private jamfPackages @defaults("name fileName") {
+  // Name of the package
+  name string
+
+  // File name of the package
+  fileName string
+
+  // Indicates if this is an OS installer
+  oSInstall bool
+
+  // ID of the category assigned to the package
+  categoryId string
+
+  // Priority value (used in installation ordering)
+  priority int
+
+  // Whether package update prompts are suppressed
+  suppressUpdates bool
+
+  // Whether package registration prompts are suppressed
+  supressRegistration bool
+}
