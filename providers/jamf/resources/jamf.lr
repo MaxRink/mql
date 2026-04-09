@@ -51,7 +51,7 @@ jamf.userByName @defaults("name email fullName") {
   // Job position of the user
   position string
 
-  // Indicates whether the user has a custom photo enabled
+  // Whether the user has a custom photo enabled
   enableCustomPhoto bool
 }
 
@@ -132,7 +132,7 @@ private jamfComputer @defaults("name platform") {
   // Whether iTunes Store account is active
   itunesStoreAccountActive bool
 
-  // Indicates if enrolled via Automated Device Enrollment
+  // Whether enrolled via Automated Device Enrollment
   enrolledViaAutomatedDeviceEnrollment bool
 
   // Status of FileVault 2 encryption
@@ -249,7 +249,7 @@ private jamfPackages @defaults("name fileName") {
   // File name of the package
   fileName string
 
-  // Indicates if this is an OS installer
+  // Whether this is an OS installer
   oSInstall bool
 
   // ID of the category assigned to the package

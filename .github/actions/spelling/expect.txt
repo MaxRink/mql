@@ -536,6 +536,7 @@ secureboot
 selfservice
 sentinelone
 serde
+SInstall
 serviceconnection
 servicedesk
 serviceprincipals
