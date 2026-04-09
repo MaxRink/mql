@@ -11,7 +11,7 @@ import (
 
 var Config = plugin.Provider{
 	Name:            "jamf",
-	ID:              "go.mondoo.com/cnquery/v9/providers/jamf",
+	ID:              "go.mondoo.com/mql/v13/providers/jamf",
 	Version:         "13.0.0",
 	ConnectionTypes: []string{provider.ConnectionType},
 	Connectors: []plugin.Connector{
@@ -25,7 +25,7 @@ To access the Jamf Pro API, you need your instance domain and API credentials.
 
 Examples:
   mql shell jamf --client-id <your-client-id> --client-secret <your-client-secret> --instance-domain https://yourdomain.jamfcloud.com
-  mql scan jamf --client-id <your-client-id> --client-secret <your-client-secret> --instance-domain https://yourdomain.jamfcloud.com
+  cnspec scan jamf --client-id <your-client-id> --client-secret <your-client-secret> --instance-domain https://yourdomain.jamfcloud.com
 `,
 			Flags: []plugin.Flag{
 				{
