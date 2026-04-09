@@ -22,13 +22,13 @@ func (r *mqlJamf) packages() ([]interface{}, error) {
 	res := []interface{}{}
 	for _, c := range inventory.Results {
 		item, err := CreateResource(r.MqlRuntime, "jamfPackages", map[string]*llx.RawData{
-			"name":                llx.StringData(c.PackageName),
-			"fileName":            llx.StringData(c.FileName),
-			"oSInstall":           llx.BoolDataPtr(c.OSInstall),
-			"categoryId":          llx.StringData(c.CategoryID),
-			"priority":            llx.IntData(c.Priority),
-			"suppressUpdates":       llx.BoolDataPtr(c.SuppressUpdates),
-			"suppressRegistration":  llx.BoolDataPtr(c.SuppressRegistration),
+			"name":                 llx.StringData(c.PackageName),
+			"fileName":             llx.StringData(c.FileName),
+			"oSInstall":            llx.BoolDataPtr(c.OSInstall),
+			"categoryId":           llx.StringData(c.CategoryID),
+			"priority":             llx.IntData(c.Priority),
+			"suppressUpdates":      llx.BoolDataPtr(c.SuppressUpdates),
+			"suppressRegistration": llx.BoolDataPtr(c.SuppressRegistration),
 		})
 		if err != nil {
 			return nil, err
