@@ -3,19 +3,10 @@
 
 package resources
 
-import (
-	"net/url"
-
-	"go.mondoo.com/mql/v13/providers/jamf/connection"
-)
-
 func (r *mqlJamf) computerInventoryCount() (int64, error) {
-	conn := r.MqlRuntime.Connection.(*connection.JamfConnection)
-	client := conn.Client
-
-	res, err := client.GetComputersInventory(url.Values{})
-	if err != nil {
-		return 0, err
+	inv := r.GetComputerInventory()
+	if inv.Error != nil {
+		return 0, inv.Error
 	}
-	return int64(res.TotalCount), nil
+	return int64(len(inv.Data)), nil
 }

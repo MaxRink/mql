@@ -185,51 +185,51 @@ private jamfLocalUserAccount @defaults("username") {
 }
 
 // Single Sign-On (SSO) settings for Jamf Pro
-private ssoSettings @defaults("SsoEnabled") {
+private ssoSettings @defaults("ssoEnabled") {
   // Whether SSO is enabled
-  SsoEnabled bool
+  ssoEnabled bool
 
   // Whether SSO is enabled for enrollment
-  SsoForEnrollmentEnabled bool
+  ssoForEnrollmentEnabled bool
 
   // Whether bypassing SSO is allowed
-  SsoBypassAllowed bool
+  ssoBypassAllowed bool
 
   // Session timeout in minutes
-  SessionTimeout int
+  sessionTimeout int
 
   // Whether SSO is enabled for macOS Self Service
-  SsoForMacOsSelfServiceEnabled bool
+  ssoForMacOsSelfServiceEnabled bool
 
   // Whether token expiration is disabled
-  TokenExpirationDisabled bool
+  tokenExpirationDisabled bool
 
   // Whether user attribute is enabled
-  UserAttributeEnabled bool
+  userAttributeEnabled bool
 
   // Name of the user attribute used
-  UserAttributeName string
+  userAttributeName string
 
   // User mapping details
-  UserMapping string
+  userMapping string
 
   // Whether account-driven enrollment uses SSO
-  EnrollmentSsoForAccountDrivenEnrollmentEnabled bool
+  enrollmentSsoForAccountDrivenEnrollmentEnabled bool
 
   // Identity provider URL
-  IdpUrl string
+  idpUrl string
 
   // Type of identity provider (e.g., Azure, Google)
-  IdpProviderType string
+  idpProviderType string
 
   // Whether group enrollment access is enabled
-  GroupEnrollmentAccessEnabled bool
+  groupEnrollmentAccessEnabled bool
 
   // Name of the group attribute used
-  GroupAttributeName string
+  groupAttributeName string
 
   // Entity ID for the SSO provider
-  EntityId string
+  entityId string
 }
 
 // Jamf Pro user summary
@@ -262,5 +262,5 @@ private jamfPackages @defaults("name fileName") {
   suppressUpdates bool
 
   // Whether package registration prompts are suppressed
-  supressRegistration bool
+  suppressRegistration bool
 }

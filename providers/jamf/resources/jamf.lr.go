@@ -294,49 +294,49 @@ var getDataFields = map[string]func(r plugin.Resource) *plugin.DataRes{
 	"jamfLocalUserAccount.passwordMinComplexCharacters": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetPasswordMinComplexCharacters()).ToDataRes(types.Int)
 	},
-	"ssoSettings.SsoEnabled": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.ssoEnabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetSsoEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.SsoForEnrollmentEnabled": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.ssoForEnrollmentEnabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetSsoForEnrollmentEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.SsoBypassAllowed": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.ssoBypassAllowed": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetSsoBypassAllowed()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.SessionTimeout": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.sessionTimeout": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetSessionTimeout()).ToDataRes(types.Int)
 	},
-	"ssoSettings.SsoForMacOsSelfServiceEnabled": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.ssoForMacOsSelfServiceEnabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetSsoForMacOsSelfServiceEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.TokenExpirationDisabled": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.tokenExpirationDisabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetTokenExpirationDisabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.UserAttributeEnabled": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.userAttributeEnabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetUserAttributeEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.UserAttributeName": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.userAttributeName": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetUserAttributeName()).ToDataRes(types.String)
 	},
-	"ssoSettings.UserMapping": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.userMapping": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetUserMapping()).ToDataRes(types.String)
 	},
-	"ssoSettings.EnrollmentSsoForAccountDrivenEnrollmentEnabled": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.enrollmentSsoForAccountDrivenEnrollmentEnabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetEnrollmentSsoForAccountDrivenEnrollmentEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.IdpUrl": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.idpUrl": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetIdpUrl()).ToDataRes(types.String)
 	},
-	"ssoSettings.IdpProviderType": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.idpProviderType": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetIdpProviderType()).ToDataRes(types.String)
 	},
-	"ssoSettings.GroupEnrollmentAccessEnabled": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.groupEnrollmentAccessEnabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetGroupEnrollmentAccessEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.GroupAttributeName": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.groupAttributeName": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetGroupAttributeName()).ToDataRes(types.String)
 	},
-	"ssoSettings.EntityId": func(r plugin.Resource) *plugin.DataRes {
+	"ssoSettings.entityId": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlSsoSettings).GetEntityId()).ToDataRes(types.String)
 	},
 	"jamfUsers.id": func(r plugin.Resource) *plugin.DataRes {
@@ -363,8 +363,8 @@ var getDataFields = map[string]func(r plugin.Resource) *plugin.DataRes{
 	"jamfPackages.suppressUpdates": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfPackages).GetSuppressUpdates()).ToDataRes(types.Bool)
 	},
-	"jamfPackages.supressRegistration": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfPackages).GetSupressRegistration()).ToDataRes(types.Bool)
+	"jamfPackages.suppressRegistration": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackages).GetSuppressRegistration()).ToDataRes(types.Bool)
 	},
 }
 
@@ -618,63 +618,63 @@ var setDataFields = map[string]func(r plugin.Resource, v *llx.RawData) bool{
 		r.(*mqlSsoSettings).__id, ok = v.Value.(string)
 		return
 	},
-	"ssoSettings.SsoEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.ssoEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).SsoEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.SsoForEnrollmentEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.ssoForEnrollmentEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).SsoForEnrollmentEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.SsoBypassAllowed": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.ssoBypassAllowed": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).SsoBypassAllowed, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.SessionTimeout": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.sessionTimeout": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).SessionTimeout, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.SsoForMacOsSelfServiceEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.ssoForMacOsSelfServiceEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).SsoForMacOsSelfServiceEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.TokenExpirationDisabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.tokenExpirationDisabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).TokenExpirationDisabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.UserAttributeEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.userAttributeEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).UserAttributeEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.UserAttributeName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.userAttributeName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).UserAttributeName, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.UserMapping": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.userMapping": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).UserMapping, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.EnrollmentSsoForAccountDrivenEnrollmentEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.enrollmentSsoForAccountDrivenEnrollmentEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).EnrollmentSsoForAccountDrivenEnrollmentEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.IdpUrl": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.idpUrl": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).IdpUrl, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.IdpProviderType": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.idpProviderType": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).IdpProviderType, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.GroupEnrollmentAccessEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.groupEnrollmentAccessEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).GroupEnrollmentAccessEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.GroupAttributeName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.groupAttributeName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).GroupAttributeName, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.EntityId": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"ssoSettings.entityId": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlSsoSettings).EntityId, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
@@ -718,8 +718,8 @@ var setDataFields = map[string]func(r plugin.Resource, v *llx.RawData) bool{
 		r.(*mqlJamfPackages).SuppressUpdates, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfPackages.supressRegistration": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackages).SupressRegistration, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamfPackages.suppressRegistration": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackages).SuppressRegistration, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
 }
@@ -1475,13 +1475,13 @@ type mqlJamfPackages struct {
 	MqlRuntime *plugin.Runtime
 	__id       string
 	// optional: if you define mqlJamfPackagesInternal it will be used here
-	Name                plugin.TValue[string]
-	FileName            plugin.TValue[string]
-	OSInstall           plugin.TValue[bool]
-	CategoryId          plugin.TValue[string]
-	Priority            plugin.TValue[int64]
-	SuppressUpdates     plugin.TValue[bool]
-	SupressRegistration plugin.TValue[bool]
+	Name                 plugin.TValue[string]
+	FileName             plugin.TValue[string]
+	OSInstall            plugin.TValue[bool]
+	CategoryId           plugin.TValue[string]
+	Priority             plugin.TValue[int64]
+	SuppressUpdates      plugin.TValue[bool]
+	SuppressRegistration plugin.TValue[bool]
 }
 
 // createJamfPackages creates a new instance of this resource
@@ -1545,6 +1545,6 @@ func (c *mqlJamfPackages) GetSuppressUpdates() *plugin.TValue[bool] {
 	return &c.SuppressUpdates
 }
 
-func (c *mqlJamfPackages) GetSupressRegistration() *plugin.TValue[bool] {
-	return &c.SupressRegistration
+func (c *mqlJamfPackages) GetSuppressRegistration() *plugin.TValue[bool] {
+	return &c.SuppressRegistration
 }

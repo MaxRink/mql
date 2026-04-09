@@ -27,8 +27,8 @@ func (r *mqlJamf) packages() ([]interface{}, error) {
 			"oSInstall":           llx.BoolDataPtr(c.OSInstall),
 			"categoryId":          llx.StringData(c.CategoryID),
 			"priority":            llx.IntData(c.Priority),
-			"suppressUpdates":     llx.BoolData(*c.SuppressUpdates),
-			"supressRegistration": llx.BoolData(*c.SuppressRegistration),
+			"suppressUpdates":       llx.BoolDataPtr(c.SuppressUpdates),
+			"suppressRegistration":  llx.BoolDataPtr(c.SuppressRegistration),
 		})
 		if err != nil {
 			return nil, err

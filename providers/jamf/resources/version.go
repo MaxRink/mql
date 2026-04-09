@@ -15,5 +15,8 @@ func (r *mqlJamf) version() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if info.Version == nil {
+		return "", nil
+	}
 	return *info.Version, nil
 }

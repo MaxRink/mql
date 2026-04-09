@@ -583,7 +583,6 @@ subnetted
 subports
 subscriptionfilter
 superusers
-supress
 swi
 switchports
 SYMANTEC

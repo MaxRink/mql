@@ -63,7 +63,7 @@ func (c *mqlJamfComputer) id() (string, error) {
 	if c == nil {
 		return "", errors.New("no id")
 	}
-	return c.Name.Data, nil
+	return c.Id.Data, nil
 }
 
 func (c *mqlJamfComputer) localUserAccounts() ([]interface{}, error) {

@@ -18,21 +18,21 @@ func (r *mqlJamf) sso() (*mqlSsoSettings, error) {
 	}
 
 	res, err := CreateResource(r.MqlRuntime, "ssoSettings", map[string]*llx.RawData{
-		"SsoEnabled":                                     llx.BoolData(info.SsoEnabled),
-		"SsoForEnrollmentEnabled":                        llx.BoolData(info.SsoForEnrollmentEnabled),
-		"SsoBypassAllowed":                               llx.BoolData(info.SsoBypassAllowed),
-		"SessionTimeout":                                 llx.IntData(info.SessionTimeout),
-		"SsoForMacOsSelfServiceEnabled":                  llx.BoolData(info.SsoForMacOsSelfServiceEnabled),
-		"TokenExpirationDisabled":                        llx.BoolData(info.TokenExpirationDisabled),
-		"UserAttributeEnabled":                           llx.BoolData(info.UserAttributeEnabled),
-		"UserAttributeName":                              llx.StringData(info.UserAttributeName),
-		"UserMapping":                                    llx.StringData(info.UserMapping),
-		"EnrollmentSsoForAccountDrivenEnrollmentEnabled": llx.BoolData(info.EnrollmentSsoForAccountDrivenEnrollmentEnabled),
-		"IdpUrl":                       llx.StringData(info.IdpUrl),
-		"IdpProviderType":              llx.StringData(info.IdpProviderType),
-		"GroupEnrollmentAccessEnabled": llx.BoolData(info.GroupEnrollmentAccessEnabled),
-		"GroupAttributeName":           llx.StringData(info.GroupAttributeName),
-		"EntityId":                     llx.StringData(info.EntityId),
+		"ssoEnabled":                                     llx.BoolData(info.SsoEnabled),
+		"ssoForEnrollmentEnabled":                        llx.BoolData(info.SsoForEnrollmentEnabled),
+		"ssoBypassAllowed":                               llx.BoolData(info.SsoBypassAllowed),
+		"sessionTimeout":                                 llx.IntData(info.SessionTimeout),
+		"ssoForMacOsSelfServiceEnabled":                  llx.BoolData(info.SsoForMacOsSelfServiceEnabled),
+		"tokenExpirationDisabled":                        llx.BoolData(info.TokenExpirationDisabled),
+		"userAttributeEnabled":                           llx.BoolData(info.UserAttributeEnabled),
+		"userAttributeName":                              llx.StringData(info.UserAttributeName),
+		"userMapping":                                    llx.StringData(info.UserMapping),
+		"enrollmentSsoForAccountDrivenEnrollmentEnabled": llx.BoolData(info.EnrollmentSsoForAccountDrivenEnrollmentEnabled),
+		"idpUrl":                       llx.StringData(info.IdpUrl),
+		"idpProviderType":              llx.StringData(info.IdpProviderType),
+		"groupEnrollmentAccessEnabled": llx.BoolData(info.GroupEnrollmentAccessEnabled),
+		"groupAttributeName":           llx.StringData(info.GroupAttributeName),
+		"entityId":                     llx.StringData(info.EntityId),
 	})
 	if err != nil {
 		return nil, err
