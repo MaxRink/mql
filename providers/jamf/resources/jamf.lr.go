@@ -18,12 +18,12 @@ import (
 const (
 	ResourceJamf                 string = "jamf"
 	ResourceJamfUserByName       string = "jamf.userByName"
-	ResourceComputerGroups       string = "computerGroups"
-	ResourceJamfComputer         string = "jamfComputer"
-	ResourceJamfLocalUserAccount string = "jamfLocalUserAccount"
-	ResourceSsoSettings          string = "ssoSettings"
-	ResourceJamfUsers            string = "jamfUsers"
-	ResourceJamfPackages         string = "jamfPackages"
+	ResourceJamfComputerGroup    string = "jamf.computerGroup"
+	ResourceJamfComputer         string = "jamf.computer"
+	ResourceJamfLocalUserAccount string = "jamf.localUserAccount"
+	ResourceJamfSsoSettings      string = "jamf.ssoSettings"
+	ResourceJamfUser             string = "jamf.user"
+	ResourceJamfPackage          string = "jamf.package"
 )
 
 var resourceFactories map[string]plugin.ResourceFactory
@@ -38,29 +38,29 @@ func init() {
 			Init:   initJamfUserByName,
 			Create: createJamfUserByName,
 		},
-		"computerGroups": {
-			// to override args, implement: initComputerGroups(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
-			Create: createComputerGroups,
+		"jamf.computerGroup": {
+			// to override args, implement: initJamfComputerGroup(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
+			Create: createJamfComputerGroup,
 		},
-		"jamfComputer": {
+		"jamf.computer": {
 			// to override args, implement: initJamfComputer(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
 			Create: createJamfComputer,
 		},
-		"jamfLocalUserAccount": {
+		"jamf.localUserAccount": {
 			// to override args, implement: initJamfLocalUserAccount(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
 			Create: createJamfLocalUserAccount,
 		},
-		"ssoSettings": {
-			// to override args, implement: initSsoSettings(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
-			Create: createSsoSettings,
+		"jamf.ssoSettings": {
+			// to override args, implement: initJamfSsoSettings(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
+			Create: createJamfSsoSettings,
 		},
-		"jamfUsers": {
-			// to override args, implement: initJamfUsers(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
-			Create: createJamfUsers,
+		"jamf.user": {
+			// to override args, implement: initJamfUser(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
+			Create: createJamfUser,
 		},
-		"jamfPackages": {
-			// to override args, implement: initJamfPackages(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
-			Create: createJamfPackages,
+		"jamf.package": {
+			// to override args, implement: initJamfPackage(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error)
+			Create: createJamfPackage,
 		},
 	}
 }
@@ -134,25 +134,25 @@ func CreateResource(runtime *plugin.Runtime, name string, args map[string]*llx.R
 
 var getDataFields = map[string]func(r plugin.Resource) *plugin.DataRes{
 	"jamf.computerInventory": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamf).GetComputerInventory()).ToDataRes(types.Array(types.Resource("jamfComputer")))
+		return (r.(*mqlJamf).GetComputerInventory()).ToDataRes(types.Array(types.Resource("jamf.computer")))
 	},
 	"jamf.computerInventoryCount": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamf).GetComputerInventoryCount()).ToDataRes(types.Int)
 	},
 	"jamf.packages": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamf).GetPackages()).ToDataRes(types.Array(types.Resource("jamfPackages")))
+		return (r.(*mqlJamf).GetPackages()).ToDataRes(types.Array(types.Resource("jamf.package")))
 	},
 	"jamf.sso": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamf).GetSso()).ToDataRes(types.Resource("ssoSettings"))
+		return (r.(*mqlJamf).GetSso()).ToDataRes(types.Resource("jamf.ssoSettings"))
 	},
 	"jamf.version": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamf).GetVersion()).ToDataRes(types.String)
 	},
 	"jamf.users": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamf).GetUsers()).ToDataRes(types.Array(types.Resource("jamfUsers")))
+		return (r.(*mqlJamf).GetUsers()).ToDataRes(types.Array(types.Resource("jamf.user")))
 	},
 	"jamf.smartGroups": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamf).GetSmartGroups()).ToDataRes(types.Array(types.Resource("computerGroups")))
+		return (r.(*mqlJamf).GetSmartGroups()).ToDataRes(types.Array(types.Resource("jamf.computerGroup")))
 	},
 	"jamf.userByName.id": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfUserByName).GetId()).ToDataRes(types.Int)
@@ -175,197 +175,200 @@ var getDataFields = map[string]func(r plugin.Resource) *plugin.DataRes{
 	"jamf.userByName.enableCustomPhoto": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfUserByName).GetEnableCustomPhoto()).ToDataRes(types.Bool)
 	},
-	"computerGroups.id": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlComputerGroups).GetId()).ToDataRes(types.Int)
+	"jamf.computerGroup.id": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfComputerGroup).GetId()).ToDataRes(types.Int)
 	},
-	"computerGroups.name": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlComputerGroups).GetName()).ToDataRes(types.String)
+	"jamf.computerGroup.name": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfComputerGroup).GetName()).ToDataRes(types.String)
 	},
-	"computerGroups.smartGroup": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlComputerGroups).GetSmartGroup()).ToDataRes(types.Bool)
+	"jamf.computerGroup.smartGroup": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfComputerGroup).GetSmartGroup()).ToDataRes(types.Bool)
 	},
-	"jamfComputer.id": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.id": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetId()).ToDataRes(types.String)
 	},
-	"jamfComputer.name": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.name": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetName()).ToDataRes(types.String)
 	},
-	"jamfComputer.make": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.make": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetMake()).ToDataRes(types.String)
 	},
-	"jamfComputer.model": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.model": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetModel()).ToDataRes(types.String)
 	},
-	"jamfComputer.operatingSystemName": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.operatingSystemName": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetOperatingSystemName()).ToDataRes(types.String)
 	},
-	"jamfComputer.operatingSystemVersion": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.operatingSystemVersion": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetOperatingSystemVersion()).ToDataRes(types.String)
 	},
-	"jamfComputer.macAddress": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.macAddress": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetMacAddress()).ToDataRes(types.String)
 	},
-	"jamfComputer.serialNumber": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.serialNumber": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetSerialNumber()).ToDataRes(types.String)
 	},
-	"jamfComputer.processorType": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.processorType": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetProcessorType()).ToDataRes(types.String)
 	},
-	"jamfComputer.processorCount": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.processorCount": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetProcessorCount()).ToDataRes(types.Int)
 	},
-	"jamfComputer.coreCount": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.coreCount": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetCoreCount()).ToDataRes(types.Int)
 	},
-	"jamfComputer.totalRamMegabytes": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.totalRamMegabytes": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetTotalRamMegabytes()).ToDataRes(types.Int)
 	},
-	"jamfComputer.lastIpAddress": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.lastIpAddress": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetLastIpAddress()).ToDataRes(types.String)
 	},
-	"jamfComputer.lastReportedIp": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.lastReportedIp": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetLastReportedIp()).ToDataRes(types.String)
 	},
-	"jamfComputer.jamfBinaryVersion": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.jamfBinaryVersion": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetJamfBinaryVersion()).ToDataRes(types.String)
 	},
-	"jamfComputer.platform": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.platform": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetPlatform()).ToDataRes(types.String)
 	},
-	"jamfComputer.reportDate": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.reportDate": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetReportDate()).ToDataRes(types.Time)
 	},
-	"jamfComputer.lastContactTime": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.lastContactTime": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetLastContactTime()).ToDataRes(types.Time)
 	},
-	"jamfComputer.lastEnrolledDate": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.lastEnrolledDate": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetLastEnrolledDate()).ToDataRes(types.Time)
 	},
-	"jamfComputer.initialEntryDate": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.initialEntryDate": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetInitialEntryDate()).ToDataRes(types.Time)
 	},
-	"jamfComputer.itunesStoreAccountActive": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.itunesStoreAccountActive": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetItunesStoreAccountActive()).ToDataRes(types.Bool)
 	},
-	"jamfComputer.enrolledViaAutomatedDeviceEnrollment": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.enrolledViaAutomatedDeviceEnrollment": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetEnrolledViaAutomatedDeviceEnrollment()).ToDataRes(types.Bool)
 	},
-	"jamfComputer.fileVault2Enabled": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.fileVault2Enabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetFileVault2Enabled()).ToDataRes(types.String)
 	},
-	"jamfComputer.autoLoginDisabled": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.autoLoginDisabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetAutoLoginDisabled()).ToDataRes(types.Bool)
 	},
-	"jamfComputer.activationLockEnabled": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.activationLockEnabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetActivationLockEnabled()).ToDataRes(types.Bool)
 	},
-	"jamfComputer.firewallEnabled": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.computer.firewallEnabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfComputer).GetFirewallEnabled()).ToDataRes(types.Bool)
 	},
-	"jamfComputer.localUserAccounts": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfComputer).GetLocalUserAccounts()).ToDataRes(types.Array(types.Resource("jamfLocalUserAccount")))
+	"jamf.computer.localUserAccounts": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfComputer).GetLocalUserAccounts()).ToDataRes(types.Array(types.Resource("jamf.localUserAccount")))
 	},
-	"jamfLocalUserAccount.uid": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.uid": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetUid()).ToDataRes(types.String)
 	},
-	"jamfLocalUserAccount.username": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.username": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetUsername()).ToDataRes(types.String)
 	},
-	"jamfLocalUserAccount.fullName": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.fullName": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetFullName()).ToDataRes(types.String)
 	},
-	"jamfLocalUserAccount.admin": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.admin": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetAdmin()).ToDataRes(types.Bool)
 	},
-	"jamfLocalUserAccount.fileVault2Enabled": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.fileVault2Enabled": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetFileVault2Enabled()).ToDataRes(types.Bool)
 	},
-	"jamfLocalUserAccount.userAccountType": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.userAccountType": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetUserAccountType()).ToDataRes(types.String)
 	},
-	"jamfLocalUserAccount.passwordMaxAge": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.passwordMaxAge": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetPasswordMaxAge()).ToDataRes(types.Int)
 	},
-	"jamfLocalUserAccount.homeDirectory": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.homeDirectory": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetHomeDirectory()).ToDataRes(types.String)
 	},
-	"jamfLocalUserAccount.passwordMinLength": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.passwordMinLength": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetPasswordMinLength()).ToDataRes(types.Int)
 	},
-	"jamfLocalUserAccount.passwordMinComplexCharacters": func(r plugin.Resource) *plugin.DataRes {
+	"jamf.localUserAccount.passwordMinComplexCharacters": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfLocalUserAccount).GetPasswordMinComplexCharacters()).ToDataRes(types.Int)
 	},
-	"ssoSettings.ssoEnabled": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetSsoEnabled()).ToDataRes(types.Bool)
+	"jamf.ssoSettings.ssoEnabled": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetSsoEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.ssoForEnrollmentEnabled": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetSsoForEnrollmentEnabled()).ToDataRes(types.Bool)
+	"jamf.ssoSettings.ssoForEnrollmentEnabled": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetSsoForEnrollmentEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.ssoBypassAllowed": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetSsoBypassAllowed()).ToDataRes(types.Bool)
+	"jamf.ssoSettings.ssoBypassAllowed": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetSsoBypassAllowed()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.sessionTimeout": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetSessionTimeout()).ToDataRes(types.Int)
+	"jamf.ssoSettings.sessionTimeout": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetSessionTimeout()).ToDataRes(types.Int)
 	},
-	"ssoSettings.ssoForMacOsSelfServiceEnabled": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetSsoForMacOsSelfServiceEnabled()).ToDataRes(types.Bool)
+	"jamf.ssoSettings.ssoForMacOsSelfServiceEnabled": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetSsoForMacOsSelfServiceEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.tokenExpirationDisabled": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetTokenExpirationDisabled()).ToDataRes(types.Bool)
+	"jamf.ssoSettings.tokenExpirationDisabled": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetTokenExpirationDisabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.userAttributeEnabled": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetUserAttributeEnabled()).ToDataRes(types.Bool)
+	"jamf.ssoSettings.userAttributeEnabled": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetUserAttributeEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.userAttributeName": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetUserAttributeName()).ToDataRes(types.String)
+	"jamf.ssoSettings.userAttributeName": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetUserAttributeName()).ToDataRes(types.String)
 	},
-	"ssoSettings.userMapping": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetUserMapping()).ToDataRes(types.String)
+	"jamf.ssoSettings.userMapping": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetUserMapping()).ToDataRes(types.String)
 	},
-	"ssoSettings.enrollmentSsoForAccountDrivenEnrollmentEnabled": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetEnrollmentSsoForAccountDrivenEnrollmentEnabled()).ToDataRes(types.Bool)
+	"jamf.ssoSettings.enrollmentSsoForAccountDrivenEnrollmentEnabled": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetEnrollmentSsoForAccountDrivenEnrollmentEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.idpUrl": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetIdpUrl()).ToDataRes(types.String)
+	"jamf.ssoSettings.idpUrl": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetIdpUrl()).ToDataRes(types.String)
 	},
-	"ssoSettings.idpProviderType": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetIdpProviderType()).ToDataRes(types.String)
+	"jamf.ssoSettings.idpProviderType": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetIdpProviderType()).ToDataRes(types.String)
 	},
-	"ssoSettings.groupEnrollmentAccessEnabled": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetGroupEnrollmentAccessEnabled()).ToDataRes(types.Bool)
+	"jamf.ssoSettings.groupEnrollmentAccessEnabled": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetGroupEnrollmentAccessEnabled()).ToDataRes(types.Bool)
 	},
-	"ssoSettings.groupAttributeName": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetGroupAttributeName()).ToDataRes(types.String)
+	"jamf.ssoSettings.groupAttributeName": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetGroupAttributeName()).ToDataRes(types.String)
 	},
-	"ssoSettings.entityId": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlSsoSettings).GetEntityId()).ToDataRes(types.String)
+	"jamf.ssoSettings.entityId": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfSsoSettings).GetEntityId()).ToDataRes(types.String)
 	},
-	"jamfUsers.id": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfUsers).GetId()).ToDataRes(types.Int)
+	"jamf.user.id": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfUser).GetId()).ToDataRes(types.Int)
 	},
-	"jamfUsers.name": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfUsers).GetName()).ToDataRes(types.String)
+	"jamf.user.name": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfUser).GetName()).ToDataRes(types.String)
 	},
-	"jamfPackages.name": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfPackages).GetName()).ToDataRes(types.String)
+	"jamf.package.id": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackage).GetId()).ToDataRes(types.String)
 	},
-	"jamfPackages.fileName": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfPackages).GetFileName()).ToDataRes(types.String)
+	"jamf.package.name": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackage).GetName()).ToDataRes(types.String)
 	},
-	"jamfPackages.oSInstall": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfPackages).GetOSInstall()).ToDataRes(types.Bool)
+	"jamf.package.fileName": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackage).GetFileName()).ToDataRes(types.String)
 	},
-	"jamfPackages.categoryId": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfPackages).GetCategoryId()).ToDataRes(types.String)
+	"jamf.package.oSInstall": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackage).GetOSInstall()).ToDataRes(types.Bool)
 	},
-	"jamfPackages.priority": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfPackages).GetPriority()).ToDataRes(types.Int)
+	"jamf.package.categoryId": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackage).GetCategoryId()).ToDataRes(types.String)
 	},
-	"jamfPackages.suppressUpdates": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfPackages).GetSuppressUpdates()).ToDataRes(types.Bool)
+	"jamf.package.priority": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackage).GetPriority()).ToDataRes(types.Int)
 	},
-	"jamfPackages.suppressRegistration": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfPackages).GetSuppressRegistration()).ToDataRes(types.Bool)
+	"jamf.package.suppressUpdates": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackage).GetSuppressUpdates()).ToDataRes(types.Bool)
+	},
+	"jamf.package.suppressRegistration": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackage).GetSuppressRegistration()).ToDataRes(types.Bool)
 	},
 }
 
@@ -396,7 +399,7 @@ var setDataFields = map[string]func(r plugin.Resource, v *llx.RawData) bool{
 		return
 	},
 	"jamf.sso": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamf).Sso, ok = plugin.RawToTValue[*mqlSsoSettings](v.Value, v.Error)
+		r.(*mqlJamf).Sso, ok = plugin.RawToTValue[*mqlJamfSsoSettings](v.Value, v.Error)
 		return
 	},
 	"jamf.version": func(r plugin.Resource, v *llx.RawData) (ok bool) {
@@ -443,284 +446,288 @@ var setDataFields = map[string]func(r plugin.Resource, v *llx.RawData) bool{
 		r.(*mqlJamfUserByName).EnableCustomPhoto, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"computerGroups.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlComputerGroups).__id, ok = v.Value.(string)
+	"jamf.computerGroup.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfComputerGroup).__id, ok = v.Value.(string)
 		return
 	},
-	"computerGroups.id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlComputerGroups).Id, ok = plugin.RawToTValue[int64](v.Value, v.Error)
+	"jamf.computerGroup.id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfComputerGroup).Id, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"computerGroups.name": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlComputerGroups).Name, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.computerGroup.name": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfComputerGroup).Name, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"computerGroups.smartGroup": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlComputerGroups).SmartGroup, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.computerGroup.smartGroup": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfComputerGroup).SmartGroup, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).__id, ok = v.Value.(string)
 		return
 	},
-	"jamfComputer.id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).Id, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.name": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.name": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).Name, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.make": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.make": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).Make, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.model": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.model": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).Model, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.operatingSystemName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.operatingSystemName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).OperatingSystemName, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.operatingSystemVersion": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.operatingSystemVersion": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).OperatingSystemVersion, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.macAddress": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.macAddress": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).MacAddress, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.serialNumber": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.serialNumber": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).SerialNumber, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.processorType": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.processorType": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).ProcessorType, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.processorCount": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.processorCount": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).ProcessorCount, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.coreCount": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.coreCount": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).CoreCount, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.totalRamMegabytes": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.totalRamMegabytes": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).TotalRamMegabytes, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.lastIpAddress": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.lastIpAddress": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).LastIpAddress, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.lastReportedIp": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.lastReportedIp": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).LastReportedIp, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.jamfBinaryVersion": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.jamfBinaryVersion": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).JamfBinaryVersion, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.platform": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.platform": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).Platform, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.reportDate": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.reportDate": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).ReportDate, ok = plugin.RawToTValue[*time.Time](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.lastContactTime": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.lastContactTime": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).LastContactTime, ok = plugin.RawToTValue[*time.Time](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.lastEnrolledDate": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.lastEnrolledDate": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).LastEnrolledDate, ok = plugin.RawToTValue[*time.Time](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.initialEntryDate": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.initialEntryDate": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).InitialEntryDate, ok = plugin.RawToTValue[*time.Time](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.itunesStoreAccountActive": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.itunesStoreAccountActive": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).ItunesStoreAccountActive, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.enrolledViaAutomatedDeviceEnrollment": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.enrolledViaAutomatedDeviceEnrollment": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).EnrolledViaAutomatedDeviceEnrollment, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.fileVault2Enabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.fileVault2Enabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).FileVault2Enabled, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.autoLoginDisabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.autoLoginDisabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).AutoLoginDisabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.activationLockEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.activationLockEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).ActivationLockEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.firewallEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.firewallEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).FirewallEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfComputer.localUserAccounts": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.computer.localUserAccounts": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfComputer).LocalUserAccounts, ok = plugin.RawToTValue[[]any](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).__id, ok = v.Value.(string)
 		return
 	},
-	"jamfLocalUserAccount.uid": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.uid": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).Uid, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.username": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.username": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).Username, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.fullName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.fullName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).FullName, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.admin": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.admin": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).Admin, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.fileVault2Enabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.fileVault2Enabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).FileVault2Enabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.userAccountType": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.userAccountType": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).UserAccountType, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.passwordMaxAge": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.passwordMaxAge": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).PasswordMaxAge, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.homeDirectory": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.homeDirectory": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).HomeDirectory, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.passwordMinLength": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.passwordMinLength": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).PasswordMinLength, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"jamfLocalUserAccount.passwordMinComplexCharacters": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+	"jamf.localUserAccount.passwordMinComplexCharacters": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlJamfLocalUserAccount).PasswordMinComplexCharacters, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).__id, ok = v.Value.(string)
+	"jamf.ssoSettings.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).__id, ok = v.Value.(string)
 		return
 	},
-	"ssoSettings.ssoEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).SsoEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.ssoSettings.ssoEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).SsoEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.ssoForEnrollmentEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).SsoForEnrollmentEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.ssoSettings.ssoForEnrollmentEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).SsoForEnrollmentEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.ssoBypassAllowed": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).SsoBypassAllowed, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.ssoSettings.ssoBypassAllowed": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).SsoBypassAllowed, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.sessionTimeout": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).SessionTimeout, ok = plugin.RawToTValue[int64](v.Value, v.Error)
+	"jamf.ssoSettings.sessionTimeout": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).SessionTimeout, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.ssoForMacOsSelfServiceEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).SsoForMacOsSelfServiceEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.ssoSettings.ssoForMacOsSelfServiceEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).SsoForMacOsSelfServiceEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.tokenExpirationDisabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).TokenExpirationDisabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.ssoSettings.tokenExpirationDisabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).TokenExpirationDisabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.userAttributeEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).UserAttributeEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.ssoSettings.userAttributeEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).UserAttributeEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.userAttributeName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).UserAttributeName, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.ssoSettings.userAttributeName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).UserAttributeName, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.userMapping": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).UserMapping, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.ssoSettings.userMapping": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).UserMapping, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.enrollmentSsoForAccountDrivenEnrollmentEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).EnrollmentSsoForAccountDrivenEnrollmentEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.ssoSettings.enrollmentSsoForAccountDrivenEnrollmentEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).EnrollmentSsoForAccountDrivenEnrollmentEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.idpUrl": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).IdpUrl, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.ssoSettings.idpUrl": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).IdpUrl, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.idpProviderType": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).IdpProviderType, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.ssoSettings.idpProviderType": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).IdpProviderType, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.groupEnrollmentAccessEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).GroupEnrollmentAccessEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.ssoSettings.groupEnrollmentAccessEnabled": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).GroupEnrollmentAccessEnabled, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.groupAttributeName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).GroupAttributeName, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.ssoSettings.groupAttributeName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).GroupAttributeName, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"ssoSettings.entityId": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlSsoSettings).EntityId, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.ssoSettings.entityId": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfSsoSettings).EntityId, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfUsers.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfUsers).__id, ok = v.Value.(string)
+	"jamf.user.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfUser).__id, ok = v.Value.(string)
 		return
 	},
-	"jamfUsers.id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfUsers).Id, ok = plugin.RawToTValue[int64](v.Value, v.Error)
+	"jamf.user.id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfUser).Id, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"jamfUsers.name": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfUsers).Name, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.user.name": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfUser).Name, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfPackages.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackages).__id, ok = v.Value.(string)
+	"jamf.package.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).__id, ok = v.Value.(string)
 		return
 	},
-	"jamfPackages.name": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackages).Name, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.package.id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).Id, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfPackages.fileName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackages).FileName, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.package.name": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).Name, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfPackages.oSInstall": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackages).OSInstall, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.package.fileName": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).FileName, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfPackages.categoryId": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackages).CategoryId, ok = plugin.RawToTValue[string](v.Value, v.Error)
+	"jamf.package.oSInstall": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).OSInstall, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
-	"jamfPackages.priority": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackages).Priority, ok = plugin.RawToTValue[int64](v.Value, v.Error)
+	"jamf.package.categoryId": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).CategoryId, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamfPackages.suppressUpdates": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackages).SuppressUpdates, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.package.priority": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).Priority, ok = plugin.RawToTValue[int64](v.Value, v.Error)
 		return
 	},
-	"jamfPackages.suppressRegistration": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackages).SuppressRegistration, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.package.suppressUpdates": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).SuppressUpdates, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+		return
+	},
+	"jamf.package.suppressRegistration": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).SuppressRegistration, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
 }
@@ -755,7 +762,7 @@ type mqlJamf struct {
 	ComputerInventory      plugin.TValue[[]any]
 	ComputerInventoryCount plugin.TValue[int64]
 	Packages               plugin.TValue[[]any]
-	Sso                    plugin.TValue[*mqlSsoSettings]
+	Sso                    plugin.TValue[*mqlJamfSsoSettings]
 	Version                plugin.TValue[string]
 	Users                  plugin.TValue[[]any]
 	SmartGroups            plugin.TValue[[]any]
@@ -836,15 +843,15 @@ func (c *mqlJamf) GetPackages() *plugin.TValue[[]any] {
 	})
 }
 
-func (c *mqlJamf) GetSso() *plugin.TValue[*mqlSsoSettings] {
-	return plugin.GetOrCompute[*mqlSsoSettings](&c.Sso, func() (*mqlSsoSettings, error) {
+func (c *mqlJamf) GetSso() *plugin.TValue[*mqlJamfSsoSettings] {
+	return plugin.GetOrCompute[*mqlJamfSsoSettings](&c.Sso, func() (*mqlJamfSsoSettings, error) {
 		if c.MqlRuntime.HasRecording {
 			d, err := c.MqlRuntime.FieldResourceFromRecording("jamf", c.__id, "sso")
 			if err != nil {
 				return nil, err
 			}
 			if d != nil {
-				return d.Value.(*mqlSsoSettings), nil
+				return d.Value.(*mqlJamfSsoSettings), nil
 			}
 		}
 
@@ -964,19 +971,19 @@ func (c *mqlJamfUserByName) GetEnableCustomPhoto() *plugin.TValue[bool] {
 	return &c.EnableCustomPhoto
 }
 
-// mqlComputerGroups for the computerGroups resource
-type mqlComputerGroups struct {
+// mqlJamfComputerGroup for the jamf.computerGroup resource
+type mqlJamfComputerGroup struct {
 	MqlRuntime *plugin.Runtime
 	__id       string
-	// optional: if you define mqlComputerGroupsInternal it will be used here
+	// optional: if you define mqlJamfComputerGroupInternal it will be used here
 	Id         plugin.TValue[int64]
 	Name       plugin.TValue[string]
 	SmartGroup plugin.TValue[bool]
 }
 
-// createComputerGroups creates a new instance of this resource
-func createComputerGroups(runtime *plugin.Runtime, args map[string]*llx.RawData) (plugin.Resource, error) {
-	res := &mqlComputerGroups{
+// createJamfComputerGroup creates a new instance of this resource
+func createJamfComputerGroup(runtime *plugin.Runtime, args map[string]*llx.RawData) (plugin.Resource, error) {
+	res := &mqlJamfComputerGroup{
 		MqlRuntime: runtime,
 	}
 
@@ -993,7 +1000,7 @@ func createComputerGroups(runtime *plugin.Runtime, args map[string]*llx.RawData)
 	}
 
 	if runtime.HasRecording {
-		args, err = runtime.ResourceFromRecording("computerGroups", res.__id)
+		args, err = runtime.ResourceFromRecording("jamf.computerGroup", res.__id)
 		if err != nil || args == nil {
 			return res, err
 		}
@@ -1003,27 +1010,27 @@ func createComputerGroups(runtime *plugin.Runtime, args map[string]*llx.RawData)
 	return res, nil
 }
 
-func (c *mqlComputerGroups) MqlName() string {
-	return "computerGroups"
+func (c *mqlJamfComputerGroup) MqlName() string {
+	return "jamf.computerGroup"
 }
 
-func (c *mqlComputerGroups) MqlID() string {
+func (c *mqlJamfComputerGroup) MqlID() string {
 	return c.__id
 }
 
-func (c *mqlComputerGroups) GetId() *plugin.TValue[int64] {
+func (c *mqlJamfComputerGroup) GetId() *plugin.TValue[int64] {
 	return &c.Id
 }
 
-func (c *mqlComputerGroups) GetName() *plugin.TValue[string] {
+func (c *mqlJamfComputerGroup) GetName() *plugin.TValue[string] {
 	return &c.Name
 }
 
-func (c *mqlComputerGroups) GetSmartGroup() *plugin.TValue[bool] {
+func (c *mqlJamfComputerGroup) GetSmartGroup() *plugin.TValue[bool] {
 	return &c.SmartGroup
 }
 
-// mqlJamfComputer for the jamfComputer resource
+// mqlJamfComputer for the jamf.computer resource
 type mqlJamfComputer struct {
 	MqlRuntime *plugin.Runtime
 	__id       string
@@ -1076,7 +1083,7 @@ func createJamfComputer(runtime *plugin.Runtime, args map[string]*llx.RawData) (
 	}
 
 	if runtime.HasRecording {
-		args, err = runtime.ResourceFromRecording("jamfComputer", res.__id)
+		args, err = runtime.ResourceFromRecording("jamf.computer", res.__id)
 		if err != nil || args == nil {
 			return res, err
 		}
@@ -1087,7 +1094,7 @@ func createJamfComputer(runtime *plugin.Runtime, args map[string]*llx.RawData) (
 }
 
 func (c *mqlJamfComputer) MqlName() string {
-	return "jamfComputer"
+	return "jamf.computer"
 }
 
 func (c *mqlJamfComputer) MqlID() string {
@@ -1201,7 +1208,7 @@ func (c *mqlJamfComputer) GetFirewallEnabled() *plugin.TValue[bool] {
 func (c *mqlJamfComputer) GetLocalUserAccounts() *plugin.TValue[[]any] {
 	return plugin.GetOrCompute[[]any](&c.LocalUserAccounts, func() ([]any, error) {
 		if c.MqlRuntime.HasRecording {
-			d, err := c.MqlRuntime.FieldResourceFromRecording("jamfComputer", c.__id, "localUserAccounts")
+			d, err := c.MqlRuntime.FieldResourceFromRecording("jamf.computer", c.__id, "localUserAccounts")
 			if err != nil {
 				return nil, err
 			}
@@ -1214,7 +1221,7 @@ func (c *mqlJamfComputer) GetLocalUserAccounts() *plugin.TValue[[]any] {
 	})
 }
 
-// mqlJamfLocalUserAccount for the jamfLocalUserAccount resource
+// mqlJamfLocalUserAccount for the jamf.localUserAccount resource
 type mqlJamfLocalUserAccount struct {
 	MqlRuntime *plugin.Runtime
 	__id       string
@@ -1245,7 +1252,7 @@ func createJamfLocalUserAccount(runtime *plugin.Runtime, args map[string]*llx.Ra
 	// to override __id implement: id() (string, error)
 
 	if runtime.HasRecording {
-		args, err = runtime.ResourceFromRecording("jamfLocalUserAccount", res.__id)
+		args, err = runtime.ResourceFromRecording("jamf.localUserAccount", res.__id)
 		if err != nil || args == nil {
 			return res, err
 		}
@@ -1256,7 +1263,7 @@ func createJamfLocalUserAccount(runtime *plugin.Runtime, args map[string]*llx.Ra
 }
 
 func (c *mqlJamfLocalUserAccount) MqlName() string {
-	return "jamfLocalUserAccount"
+	return "jamf.localUserAccount"
 }
 
 func (c *mqlJamfLocalUserAccount) MqlID() string {
@@ -1303,11 +1310,11 @@ func (c *mqlJamfLocalUserAccount) GetPasswordMinComplexCharacters() *plugin.TVal
 	return &c.PasswordMinComplexCharacters
 }
 
-// mqlSsoSettings for the ssoSettings resource
-type mqlSsoSettings struct {
+// mqlJamfSsoSettings for the jamf.ssoSettings resource
+type mqlJamfSsoSettings struct {
 	MqlRuntime *plugin.Runtime
 	__id       string
-	// optional: if you define mqlSsoSettingsInternal it will be used here
+	// optional: if you define mqlJamfSsoSettingsInternal it will be used here
 	SsoEnabled                                     plugin.TValue[bool]
 	SsoForEnrollmentEnabled                        plugin.TValue[bool]
 	SsoBypassAllowed                               plugin.TValue[bool]
@@ -1325,9 +1332,9 @@ type mqlSsoSettings struct {
 	EntityId                                       plugin.TValue[string]
 }
 
-// createSsoSettings creates a new instance of this resource
-func createSsoSettings(runtime *plugin.Runtime, args map[string]*llx.RawData) (plugin.Resource, error) {
-	res := &mqlSsoSettings{
+// createJamfSsoSettings creates a new instance of this resource
+func createJamfSsoSettings(runtime *plugin.Runtime, args map[string]*llx.RawData) (plugin.Resource, error) {
+	res := &mqlJamfSsoSettings{
 		MqlRuntime: runtime,
 	}
 
@@ -1339,7 +1346,7 @@ func createSsoSettings(runtime *plugin.Runtime, args map[string]*llx.RawData) (p
 	// to override __id implement: id() (string, error)
 
 	if runtime.HasRecording {
-		args, err = runtime.ResourceFromRecording("ssoSettings", res.__id)
+		args, err = runtime.ResourceFromRecording("jamf.ssoSettings", res.__id)
 		if err != nil || args == nil {
 			return res, err
 		}
@@ -1349,86 +1356,86 @@ func createSsoSettings(runtime *plugin.Runtime, args map[string]*llx.RawData) (p
 	return res, nil
 }
 
-func (c *mqlSsoSettings) MqlName() string {
-	return "ssoSettings"
+func (c *mqlJamfSsoSettings) MqlName() string {
+	return "jamf.ssoSettings"
 }
 
-func (c *mqlSsoSettings) MqlID() string {
+func (c *mqlJamfSsoSettings) MqlID() string {
 	return c.__id
 }
 
-func (c *mqlSsoSettings) GetSsoEnabled() *plugin.TValue[bool] {
+func (c *mqlJamfSsoSettings) GetSsoEnabled() *plugin.TValue[bool] {
 	return &c.SsoEnabled
 }
 
-func (c *mqlSsoSettings) GetSsoForEnrollmentEnabled() *plugin.TValue[bool] {
+func (c *mqlJamfSsoSettings) GetSsoForEnrollmentEnabled() *plugin.TValue[bool] {
 	return &c.SsoForEnrollmentEnabled
 }
 
-func (c *mqlSsoSettings) GetSsoBypassAllowed() *plugin.TValue[bool] {
+func (c *mqlJamfSsoSettings) GetSsoBypassAllowed() *plugin.TValue[bool] {
 	return &c.SsoBypassAllowed
 }
 
-func (c *mqlSsoSettings) GetSessionTimeout() *plugin.TValue[int64] {
+func (c *mqlJamfSsoSettings) GetSessionTimeout() *plugin.TValue[int64] {
 	return &c.SessionTimeout
 }
 
-func (c *mqlSsoSettings) GetSsoForMacOsSelfServiceEnabled() *plugin.TValue[bool] {
+func (c *mqlJamfSsoSettings) GetSsoForMacOsSelfServiceEnabled() *plugin.TValue[bool] {
 	return &c.SsoForMacOsSelfServiceEnabled
 }
 
-func (c *mqlSsoSettings) GetTokenExpirationDisabled() *plugin.TValue[bool] {
+func (c *mqlJamfSsoSettings) GetTokenExpirationDisabled() *plugin.TValue[bool] {
 	return &c.TokenExpirationDisabled
 }
 
-func (c *mqlSsoSettings) GetUserAttributeEnabled() *plugin.TValue[bool] {
+func (c *mqlJamfSsoSettings) GetUserAttributeEnabled() *plugin.TValue[bool] {
 	return &c.UserAttributeEnabled
 }
 
-func (c *mqlSsoSettings) GetUserAttributeName() *plugin.TValue[string] {
+func (c *mqlJamfSsoSettings) GetUserAttributeName() *plugin.TValue[string] {
 	return &c.UserAttributeName
 }
 
-func (c *mqlSsoSettings) GetUserMapping() *plugin.TValue[string] {
+func (c *mqlJamfSsoSettings) GetUserMapping() *plugin.TValue[string] {
 	return &c.UserMapping
 }
 
-func (c *mqlSsoSettings) GetEnrollmentSsoForAccountDrivenEnrollmentEnabled() *plugin.TValue[bool] {
+func (c *mqlJamfSsoSettings) GetEnrollmentSsoForAccountDrivenEnrollmentEnabled() *plugin.TValue[bool] {
 	return &c.EnrollmentSsoForAccountDrivenEnrollmentEnabled
 }
 
-func (c *mqlSsoSettings) GetIdpUrl() *plugin.TValue[string] {
+func (c *mqlJamfSsoSettings) GetIdpUrl() *plugin.TValue[string] {
 	return &c.IdpUrl
 }
 
-func (c *mqlSsoSettings) GetIdpProviderType() *plugin.TValue[string] {
+func (c *mqlJamfSsoSettings) GetIdpProviderType() *plugin.TValue[string] {
 	return &c.IdpProviderType
 }
 
-func (c *mqlSsoSettings) GetGroupEnrollmentAccessEnabled() *plugin.TValue[bool] {
+func (c *mqlJamfSsoSettings) GetGroupEnrollmentAccessEnabled() *plugin.TValue[bool] {
 	return &c.GroupEnrollmentAccessEnabled
 }
 
-func (c *mqlSsoSettings) GetGroupAttributeName() *plugin.TValue[string] {
+func (c *mqlJamfSsoSettings) GetGroupAttributeName() *plugin.TValue[string] {
 	return &c.GroupAttributeName
 }
 
-func (c *mqlSsoSettings) GetEntityId() *plugin.TValue[string] {
+func (c *mqlJamfSsoSettings) GetEntityId() *plugin.TValue[string] {
 	return &c.EntityId
 }
 
-// mqlJamfUsers for the jamfUsers resource
-type mqlJamfUsers struct {
+// mqlJamfUser for the jamf.user resource
+type mqlJamfUser struct {
 	MqlRuntime *plugin.Runtime
 	__id       string
-	// optional: if you define mqlJamfUsersInternal it will be used here
+	// optional: if you define mqlJamfUserInternal it will be used here
 	Id   plugin.TValue[int64]
 	Name plugin.TValue[string]
 }
 
-// createJamfUsers creates a new instance of this resource
-func createJamfUsers(runtime *plugin.Runtime, args map[string]*llx.RawData) (plugin.Resource, error) {
-	res := &mqlJamfUsers{
+// createJamfUser creates a new instance of this resource
+func createJamfUser(runtime *plugin.Runtime, args map[string]*llx.RawData) (plugin.Resource, error) {
+	res := &mqlJamfUser{
 		MqlRuntime: runtime,
 	}
 
@@ -1445,7 +1452,7 @@ func createJamfUsers(runtime *plugin.Runtime, args map[string]*llx.RawData) (plu
 	}
 
 	if runtime.HasRecording {
-		args, err = runtime.ResourceFromRecording("jamfUsers", res.__id)
+		args, err = runtime.ResourceFromRecording("jamf.user", res.__id)
 		if err != nil || args == nil {
 			return res, err
 		}
@@ -1455,27 +1462,28 @@ func createJamfUsers(runtime *plugin.Runtime, args map[string]*llx.RawData) (plu
 	return res, nil
 }
 
-func (c *mqlJamfUsers) MqlName() string {
-	return "jamfUsers"
+func (c *mqlJamfUser) MqlName() string {
+	return "jamf.user"
 }
 
-func (c *mqlJamfUsers) MqlID() string {
+func (c *mqlJamfUser) MqlID() string {
 	return c.__id
 }
 
-func (c *mqlJamfUsers) GetId() *plugin.TValue[int64] {
+func (c *mqlJamfUser) GetId() *plugin.TValue[int64] {
 	return &c.Id
 }
 
-func (c *mqlJamfUsers) GetName() *plugin.TValue[string] {
+func (c *mqlJamfUser) GetName() *plugin.TValue[string] {
 	return &c.Name
 }
 
-// mqlJamfPackages for the jamfPackages resource
-type mqlJamfPackages struct {
+// mqlJamfPackage for the jamf.package resource
+type mqlJamfPackage struct {
 	MqlRuntime *plugin.Runtime
 	__id       string
-	// optional: if you define mqlJamfPackagesInternal it will be used here
+	// optional: if you define mqlJamfPackageInternal it will be used here
+	Id                   plugin.TValue[string]
 	Name                 plugin.TValue[string]
 	FileName             plugin.TValue[string]
 	OSInstall            plugin.TValue[bool]
@@ -1485,9 +1493,9 @@ type mqlJamfPackages struct {
 	SuppressRegistration plugin.TValue[bool]
 }
 
-// createJamfPackages creates a new instance of this resource
-func createJamfPackages(runtime *plugin.Runtime, args map[string]*llx.RawData) (plugin.Resource, error) {
-	res := &mqlJamfPackages{
+// createJamfPackage creates a new instance of this resource
+func createJamfPackage(runtime *plugin.Runtime, args map[string]*llx.RawData) (plugin.Resource, error) {
+	res := &mqlJamfPackage{
 		MqlRuntime: runtime,
 	}
 
@@ -1504,7 +1512,7 @@ func createJamfPackages(runtime *plugin.Runtime, args map[string]*llx.RawData) (
 	}
 
 	if runtime.HasRecording {
-		args, err = runtime.ResourceFromRecording("jamfPackages", res.__id)
+		args, err = runtime.ResourceFromRecording("jamf.package", res.__id)
 		if err != nil || args == nil {
 			return res, err
 		}
@@ -1514,38 +1522,42 @@ func createJamfPackages(runtime *plugin.Runtime, args map[string]*llx.RawData) (
 	return res, nil
 }
 
-func (c *mqlJamfPackages) MqlName() string {
-	return "jamfPackages"
+func (c *mqlJamfPackage) MqlName() string {
+	return "jamf.package"
 }
 
-func (c *mqlJamfPackages) MqlID() string {
+func (c *mqlJamfPackage) MqlID() string {
 	return c.__id
 }
 
-func (c *mqlJamfPackages) GetName() *plugin.TValue[string] {
+func (c *mqlJamfPackage) GetId() *plugin.TValue[string] {
+	return &c.Id
+}
+
+func (c *mqlJamfPackage) GetName() *plugin.TValue[string] {
 	return &c.Name
 }
 
-func (c *mqlJamfPackages) GetFileName() *plugin.TValue[string] {
+func (c *mqlJamfPackage) GetFileName() *plugin.TValue[string] {
 	return &c.FileName
 }
 
-func (c *mqlJamfPackages) GetOSInstall() *plugin.TValue[bool] {
+func (c *mqlJamfPackage) GetOSInstall() *plugin.TValue[bool] {
 	return &c.OSInstall
 }
 
-func (c *mqlJamfPackages) GetCategoryId() *plugin.TValue[string] {
+func (c *mqlJamfPackage) GetCategoryId() *plugin.TValue[string] {
 	return &c.CategoryId
 }
 
-func (c *mqlJamfPackages) GetPriority() *plugin.TValue[int64] {
+func (c *mqlJamfPackage) GetPriority() *plugin.TValue[int64] {
 	return &c.Priority
 }
 
-func (c *mqlJamfPackages) GetSuppressUpdates() *plugin.TValue[bool] {
+func (c *mqlJamfPackage) GetSuppressUpdates() *plugin.TValue[bool] {
 	return &c.SuppressUpdates
 }
 
-func (c *mqlJamfPackages) GetSuppressRegistration() *plugin.TValue[bool] {
+func (c *mqlJamfPackage) GetSuppressRegistration() *plugin.TValue[bool] {
 	return &c.SuppressRegistration
 }

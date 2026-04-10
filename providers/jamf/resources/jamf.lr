@@ -7,25 +7,25 @@ option go_package = "go.mondoo.com/mql/v13/providers/jamf/resources"
 // Gather Jamf Pro Information
 jamf {
   // Retrieve a list of all computers in the Jamf Pro inventory
-  computerInventory() []jamfComputer
+  computerInventory() []jamf.computer
 
   // Return the total number of computer inventory records
   computerInventoryCount() int
 
   // Retrieve a list of all software packages configured in Jamf Pro
-  packages() []jamfPackages
+  packages() []jamf.package
 
   // Retrieve current SSO configuration settings
-  sso() ssoSettings
+  sso() jamf.ssoSettings
 
   // Retrieve the Jamf Pro version string
   version() string
 
   // Retrieve a list of all user accounts configured in Jamf Pro
-  users() []jamfUsers
+  users() []jamf.user
 
   // Retrieve a list of computer smart groups
-  smartGroups() []computerGroups
+  smartGroups() []jamf.computerGroup
 }
 
 // Retrieve a Jamf user by their username
@@ -56,7 +56,7 @@ jamf.userByName @defaults("name email fullName") {
 }
 
 // Jamf smart or static computer group
-private computerGroups @defaults("name smartGroup") {
+private jamf.computerGroup @defaults("name smartGroup") {
   // Group ID
   id int
 
@@ -68,7 +68,7 @@ private computerGroups @defaults("name smartGroup") {
 }
 
 // Jamf Pro Computer Inventory record
-private jamfComputer @defaults("name platform") {
+private jamf.computer @defaults("name platform") {
   // Computer ID
   id string
 
@@ -148,11 +148,11 @@ private jamfComputer @defaults("name platform") {
   firewallEnabled bool
 
   // List of local user accounts on the computer
-  localUserAccounts() []jamfLocalUserAccount
+  localUserAccounts() []jamf.localUserAccount
 }
 
 // Local user account information for Jamf-managed computers
-private jamfLocalUserAccount @defaults("username") {
+private jamf.localUserAccount @defaults("username") {
   // System UID of the user
   uid string
 
@@ -185,7 +185,7 @@ private jamfLocalUserAccount @defaults("username") {
 }
 
 // Single Sign-On (SSO) settings for Jamf Pro
-private ssoSettings @defaults("ssoEnabled") {
+private jamf.ssoSettings @defaults("ssoEnabled") {
   // Whether SSO is enabled
   ssoEnabled bool
 
@@ -233,7 +233,7 @@ private ssoSettings @defaults("ssoEnabled") {
 }
 
 // Jamf Pro user summary
-private jamfUsers @defaults("name") {
+private jamf.user @defaults("name") {
   // User ID
   id int
 
@@ -242,7 +242,10 @@ private jamfUsers @defaults("name") {
 }
 
 // Jamf Pro package definition
-private jamfPackages @defaults("name fileName") {
+private jamf.package @defaults("name fileName") {
+  // Package ID
+  id string
+
   // Name of the package
   name string
 

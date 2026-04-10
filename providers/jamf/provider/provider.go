@@ -36,45 +36,20 @@ func (s *Service) ParseCLI(req *plugin.ParseCLIReq) (*plugin.ParseCLIRes, error)
 		flags = map[string]*llx.Primitive{}
 	}
 
+	// Resolve credentials: flags take precedence over env vars
+	clientId := flagOrEnv(flags, "client-id", "CLIENT_ID")
+	clientSecret := flagOrEnv(flags, "client-secret", "CLIENT_SECRET")
+	instanceDomain := flagOrEnv(flags, "instance-domain", "INSTANCE_DOMAIN")
+
 	conf := &inventory.Config{
-		Type:    req.Connector,
-		Options: map[string]string{},
+		Type: req.Connector,
+		Options: map[string]string{
+			"instance_domain": instanceDomain,
+		},
 	}
 
-	// CLI flags for credentials
-	var clientId, clientSecret, instanceDomain string
-
-	if v, ok := flags["client-id"]; ok && len(v.Value) != 0 {
-		clientId = string(v.Value)
-		conf.Options["client_id"] = clientId
-	}
-	if v, ok := flags["client-secret"]; ok && len(v.Value) != 0 {
-		clientSecret = string(v.Value)
-		conf.Options["client_secret"] = clientSecret
-	}
-	if v, ok := flags["instance-domain"]; ok && len(v.Value) != 0 {
-		instanceDomain = string(v.Value)
-		conf.Options["instance_domain"] = instanceDomain
-	}
-
-	// Fallback to env if flags not provided
-	if clientId == "" {
-		clientId = os.Getenv("CLIENT_ID")
-	}
-	if clientSecret == "" {
-		clientSecret = os.Getenv("CLIENT_SECRET")
-	}
-	if instanceDomain == "" {
-		instanceDomain = os.Getenv("INSTANCE_DOMAIN")
-	}
-
-	// Attach as credentials if available
 	if clientId != "" || clientSecret != "" {
 		conf.Credentials = append(conf.Credentials, vault.NewPasswordCredential(clientId, clientSecret))
-	}
-
-	if instanceDomain != "" && conf.Options["instance_domain"] == "" {
-		conf.Options["instance_domain"] = instanceDomain
 	}
 
 	asset := &inventory.Asset{
@@ -83,6 +58,13 @@ func (s *Service) ParseCLI(req *plugin.ParseCLIReq) (*plugin.ParseCLIRes, error)
 	}
 
 	return &plugin.ParseCLIRes{Asset: asset}, nil
+}
+
+func flagOrEnv(flags map[string]*llx.Primitive, flagName, envName string) string {
+	if v, ok := flags[flagName]; ok && len(v.Value) != 0 {
+		return string(v.Value)
+	}
+	return os.Getenv(envName)
 }
 
 func (s *Service) Connect(req *plugin.ConnectReq, callback plugin.ProviderCallback) (*plugin.ConnectRes, error) {

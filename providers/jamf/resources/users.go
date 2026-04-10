@@ -4,7 +4,7 @@
 package resources
 
 import (
-	"errors"
+	"strconv"
 
 	"go.mondoo.com/mql/v13/llx"
 	"go.mondoo.com/mql/v13/providers/jamf/connection"
@@ -18,24 +18,24 @@ func (r *mqlJamf) users() ([]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	if users == nil {
+		return nil, nil
+	}
 
 	var res []interface{}
 	for _, u := range users.Users {
-		item, err := CreateResource(r.MqlRuntime, "jamfUsers", map[string]*llx.RawData{
+		item, err := CreateResource(r.MqlRuntime, "jamf.user", map[string]*llx.RawData{
 			"id":   llx.IntData(u.ID),
 			"name": llx.StringData(u.Name),
 		})
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, item.(*mqlJamfUsers))
+		res = append(res, item)
 	}
 	return res, nil
 }
 
-func (u *mqlJamfUsers) id() (string, error) {
-	if u == nil {
-		return "", errors.New("no id")
-	}
-	return u.Name.Data, nil
+func (u *mqlJamfUser) id() (string, error) {
+	return "jamf.user/" + strconv.FormatInt(u.Id.Data, 10), nil
 }

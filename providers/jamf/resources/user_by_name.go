@@ -25,6 +25,9 @@ func initJamfUserByName(runtime *plugin.Runtime, args map[string]*llx.RawData) (
 	if err != nil {
 		return nil, nil, err
 	}
+	if user == nil {
+		return nil, nil, errors.New("user not found: " + name)
+	}
 
 	args["id"] = llx.IntData(user.ID)
 	args["name"] = llx.StringData(user.Name)

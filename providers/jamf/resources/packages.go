@@ -4,8 +4,6 @@
 package resources
 
 import (
-	"errors"
-
 	"go.mondoo.com/mql/v13/llx"
 	"go.mondoo.com/mql/v13/providers/jamf/connection"
 )
@@ -18,10 +16,14 @@ func (r *mqlJamf) packages() ([]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	if inventory == nil {
+		return nil, nil
+	}
 
-	res := []interface{}{}
+	var res []interface{}
 	for _, c := range inventory.Results {
-		item, err := CreateResource(r.MqlRuntime, "jamfPackages", map[string]*llx.RawData{
+		item, err := CreateResource(r.MqlRuntime, "jamf.package", map[string]*llx.RawData{
+			"id":                   llx.StringData(c.ID),
 			"name":                 llx.StringData(c.PackageName),
 			"fileName":             llx.StringData(c.FileName),
 			"oSInstall":            llx.BoolDataPtr(c.OSInstall),
@@ -33,15 +35,12 @@ func (r *mqlJamf) packages() ([]interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, item.(*mqlJamfPackages))
+		res = append(res, item)
 	}
 
 	return res, nil
 }
 
-func (c *mqlJamfPackages) id() (string, error) {
-	if c == nil {
-		return "", errors.New("no id")
-	}
-	return c.Name.Data, nil
+func (c *mqlJamfPackage) id() (string, error) {
+	return "jamf.package/" + c.Id.Data, nil
 }

@@ -5,10 +5,11 @@ package resources
 
 import (
 	"go.mondoo.com/mql/v13/llx"
+	"go.mondoo.com/mql/v13/providers-sdk/v1/plugin"
 	"go.mondoo.com/mql/v13/providers/jamf/connection"
 )
 
-func (r *mqlJamf) sso() (*mqlSsoSettings, error) {
+func (r *mqlJamf) sso() (*mqlJamfSsoSettings, error) {
 	conn := r.MqlRuntime.Connection.(*connection.JamfConnection)
 	client := conn.Client
 
@@ -16,8 +17,12 @@ func (r *mqlJamf) sso() (*mqlSsoSettings, error) {
 	if err != nil {
 		return nil, err
 	}
+	if info == nil {
+		r.Sso = plugin.TValue[*mqlJamfSsoSettings]{State: plugin.StateIsSet | plugin.StateIsNull}
+		return nil, nil
+	}
 
-	res, err := CreateResource(r.MqlRuntime, "ssoSettings", map[string]*llx.RawData{
+	res, err := CreateResource(r.MqlRuntime, "jamf.ssoSettings", map[string]*llx.RawData{
 		"ssoEnabled":                                     llx.BoolData(info.SsoEnabled),
 		"ssoForEnrollmentEnabled":                        llx.BoolData(info.SsoForEnrollmentEnabled),
 		"ssoBypassAllowed":                               llx.BoolData(info.SsoBypassAllowed),
@@ -38,5 +43,5 @@ func (r *mqlJamf) sso() (*mqlSsoSettings, error) {
 		return nil, err
 	}
 
-	return res.(*mqlSsoSettings), nil
+	return res.(*mqlJamfSsoSettings), nil
 }

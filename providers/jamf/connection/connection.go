@@ -19,13 +19,19 @@ type JamfConnection struct {
 	Conf   *inventory.Config
 	asset  *inventory.Asset
 	Client *jamfpro.Client
+
+	// localUserAccounts caches per-computer local user accounts from the
+	// initial inventory fetch, keyed by computer ID. This avoids N+1 API
+	// calls when iterating computerInventory then accessing localUserAccounts.
+	localUserAccounts map[string][]jamfpro.ComputerInventorySubsetLocalUserAccount
 }
 
 func NewJamfConnection(id uint32, asset *inventory.Asset, conf *inventory.Config) (*JamfConnection, error) {
 	conn := &JamfConnection{
-		Connection: plugin.NewConnection(id, asset),
-		Conf:       conf,
-		asset:      asset,
+		Connection:        plugin.NewConnection(id, asset),
+		Conf:              conf,
+		asset:             asset,
+		localUserAccounts: make(map[string][]jamfpro.ComputerInventorySubsetLocalUserAccount),
 	}
 
 	// Extract credentials and options from conf
@@ -87,4 +93,17 @@ func (j *JamfConnection) PlatformInfo() (*inventory.Platform, error) {
 func (j *JamfConnection) Identifier() string {
 	domain := j.Conf.Options["instance_domain"]
 	return "//platformid.api.mondoo.app/runtime/jamf/" + strings.ToLower(domain)
+}
+
+// CacheLocalUserAccounts stores local user accounts for a computer ID,
+// populated during the initial inventory fetch.
+func (j *JamfConnection) CacheLocalUserAccounts(computerID string, accounts []jamfpro.ComputerInventorySubsetLocalUserAccount) {
+	j.localUserAccounts[computerID] = accounts
+}
+
+// GetCachedLocalUserAccounts retrieves cached local user accounts for a
+// computer ID. Returns nil, false if no cache entry exists.
+func (j *JamfConnection) GetCachedLocalUserAccounts(computerID string) ([]jamfpro.ComputerInventorySubsetLocalUserAccount, bool) {
+	accounts, ok := j.localUserAccounts[computerID]
+	return accounts, ok
 }

@@ -4,7 +4,7 @@
 package resources
 
 import (
-	"errors"
+	"strconv"
 
 	"go.mondoo.com/mql/v13/llx"
 	"go.mondoo.com/mql/v13/providers/jamf/connection"
@@ -18,10 +18,13 @@ func (r *mqlJamf) smartGroups() ([]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	if groups == nil {
+		return nil, nil
+	}
 
-	res := []interface{}{}
+	var res []interface{}
 	for _, g := range groups.Results {
-		item, err := CreateResource(r.MqlRuntime, "computerGroups", map[string]*llx.RawData{
+		item, err := CreateResource(r.MqlRuntime, "jamf.computerGroup", map[string]*llx.RawData{
 			"id":         llx.IntData(g.ID),
 			"name":       llx.StringData(g.Name),
 			"smartGroup": llx.BoolData(g.IsSmart),
@@ -29,15 +32,12 @@ func (r *mqlJamf) smartGroups() ([]interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		res = append(res, item.(*mqlComputerGroups))
+		res = append(res, item)
 	}
 
 	return res, nil
 }
 
-func (u *mqlComputerGroups) id() (string, error) {
-	if u == nil {
-		return "", errors.New("no id")
-	}
-	return u.Name.Data, nil
+func (u *mqlJamfComputerGroup) id() (string, error) {
+	return "jamf.computerGroup/" + strconv.FormatInt(u.Id.Data, 10), nil
 }
