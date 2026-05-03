@@ -65,6 +65,12 @@ func (r *InterfaceResource) Interfaces() ([]Interface, error) {
 			conn: r.conn,
 		}
 		return handler.Interfaces()
+	} else if asset.Platform.Name == "aix" {
+		log.Debug().Msg("detected aix platform")
+		handler := &AIXInterfaceHandler{
+			conn: r.conn,
+		}
+		return handler.Interfaces()
 	} else if asset.Platform.Name == "windows" {
 		log.Debug().Msg("detected windows platform")
 		handler := &WindowsInterfaceHandler{
@@ -300,6 +306,167 @@ func (i *MacOSInterfaceHandler) ParseMacOS(r io.Reader) ([]Interface, error) {
 
 	}
 	return interfaces, nil
+}
+
+type AIXInterfaceHandler struct {
+	conn shared.Connection
+}
+
+func (i *AIXInterfaceHandler) Interfaces() ([]Interface, error) {
+	cmd, err := i.conn.RunCommand("ifconfig -a")
+	if err != nil {
+		return nil, errors.Wrap(err, "could not fetch aix network adapter")
+	}
+	ifaces, err := i.ParseAIX(cmd.Stdout)
+	if err != nil {
+		return nil, err
+	}
+
+	// AIX ifconfig does not emit MAC or MTU; pull them from `netstat -in`.
+	cmd2, err := i.conn.RunCommand("netstat -in")
+	if err != nil {
+		log.Debug().Err(err).Msg("aix: could not run 'netstat -in', returning interfaces without MAC/MTU")
+		return ifaces, nil
+	}
+	extras, _ := parseAIXNetstatIn(cmd2.Stdout)
+	for j := range ifaces {
+		if e, ok := extras[ifaces[j].Name]; ok {
+			if ifaces[j].MTU == 0 {
+				ifaces[j].MTU = e.MTU
+			}
+			if ifaces[j].HardwareAddr == nil {
+				ifaces[j].HardwareAddr = e.MAC
+			}
+		}
+	}
+	return ifaces, nil
+}
+
+// AIXIfconfigHeader matches the first line of an AIX ifconfig stanza.
+// Flag values may be "<hexNumber>" or "<hexNumber>,<hexNumber>" (the
+// latter is a 64-bit flags value split as upper,lower). The bracketed
+// name list may itself contain parens (e.g. "CHECKSUM_OFFLOAD(ACTIVE)"),
+// so the inside of <> is captured permissively.
+var AIXIfconfigHeader = regexp.MustCompile(`^([a-zA-Z0-9._]+):\s+flags=[^<]*<([^>]*)>`)
+
+func (i *AIXInterfaceHandler) ParseAIX(r io.Reader) ([]Interface, error) {
+	interfaces := []Interface{}
+	ifIndex := -1
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		if m := AIXIfconfigHeader.FindStringSubmatch(line); len(m) > 0 {
+			var flags net.Flags
+			if m[2] != "" {
+				for _, f := range strings.Split(m[2], ",") {
+					switch strings.ToLower(strings.TrimSpace(f)) {
+					case "up":
+						flags |= net.FlagUp
+					case "broadcast":
+						flags |= net.FlagBroadcast
+					case "multicast":
+						flags |= net.FlagMulticast
+					case "loopback":
+						flags |= net.FlagLoopback
+					case "pointopoint", "pointtopoint":
+						flags |= net.FlagPointToPoint
+					}
+				}
+			}
+
+			ifIndex++
+			interfaces = append(interfaces, Interface{
+				Index: ifIndex + 1,
+				Name:  m[1],
+				Flags: flags,
+			})
+			continue
+		}
+
+		if ifIndex < 0 {
+			continue
+		}
+		cur := &interfaces[ifIndex]
+
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) < 2 {
+			continue
+		}
+
+		switch fields[0] {
+		case "inet", "inet6":
+			addr := fields[1]
+			if k := strings.Index(addr, "/"); k != -1 {
+				addr = addr[:k]
+			}
+			if k := strings.Index(addr, "%"); k != -1 {
+				addr = addr[:k]
+			}
+			if ip := net.ParseIP(addr); ip != nil {
+				cur.Addrs = append(cur.Addrs, &ipAddr{IP: ip})
+			}
+		}
+	}
+	return interfaces, nil
+}
+
+type aixNetstatInRow struct {
+	MTU int
+	MAC net.HardwareAddr
+}
+
+// AIXDottedMAC matches AIX's `netstat -in` MAC format: dotted hex
+// octets with leading zeros stripped, e.g. "0.50.56.b0.9a.a5".
+var AIXDottedMAC = regexp.MustCompile(`^[0-9a-fA-F]{1,2}(?:\.[0-9a-fA-F]{1,2}){5}$`)
+
+func aixDottedMACToColon(s string) string {
+	if !AIXDottedMAC.MatchString(s) {
+		return ""
+	}
+	parts := strings.Split(s, ".")
+	for j, p := range parts {
+		if len(p) == 1 {
+			parts[j] = "0" + p
+		}
+	}
+	return strings.ToLower(strings.Join(parts, ":"))
+}
+
+// parseAIXNetstatIn returns a map from interface name to its MTU/MAC,
+// derived from the "link#N" rows of `netstat -in`. Per-IP rows are
+// ignored — ifconfig is the canonical source for IP data.
+func parseAIXNetstatIn(r io.Reader) (map[string]aixNetstatInRow, error) {
+	out := map[string]aixNetstatInRow{}
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "Name") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		if !strings.HasPrefix(fields[2], "link#") {
+			continue
+		}
+		mtu, _ := strconv.Atoi(fields[1])
+		row := aixNetstatInRow{MTU: mtu}
+		if len(fields) >= 4 {
+			if colon := aixDottedMACToColon(fields[3]); colon != "" {
+				if mac, err := net.ParseMAC(colon); err == nil {
+					row.MAC = mac
+				}
+			}
+		}
+		out[fields[0]] = row
+	}
+	return out, nil
 }
 
 type WindowsInterface struct {
