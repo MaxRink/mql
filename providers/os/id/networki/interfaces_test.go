@@ -312,3 +312,66 @@ func TestInterfacesWindowsFallbackIpconfigCmd(t *testing.T) {
 		}
 	}
 }
+
+func TestInterfacesAIX(t *testing.T) {
+	conn, err := mock.New(0, &inventory.Asset{}, mock.WithPath("./testdata/aix.toml"))
+	require.NoError(t, err)
+	platform, ok := detector.DetectOS(conn)
+	require.True(t, ok)
+	assert.Equal(t, "aix", platform.Name)
+
+	interfaces, err := subject.Interfaces(conn, platform)
+	require.NoError(t, err)
+	assert.Len(t, interfaces, 3)
+
+	// en0 — primary ethernet, MAC and MTU come from `netstat -in`
+	// because AIX ifconfig does not emit them.
+	index := subject.FindInterface(interfaces, subject.Interface{Name: "en0"})
+	if assert.NotEqual(t, -1, index) {
+		en0 := interfaces[index]
+		assert.Equal(t, "en0", en0.Name)
+		assert.Equal(t, "00:50:56:b0:9a:a5", en0.MACAddress)
+		assert.Equal(t, 1500, en0.MTU)
+		if assert.NotNil(t, en0.Active) {
+			assert.True(t, *en0.Active)
+		}
+		assert.Contains(t, en0.Flags, "UP")
+		assert.Contains(t, en0.Flags, "BROADCAST")
+		assert.Contains(t, en0.Flags, "CHECKSUM_OFFLOAD(ACTIVE)")
+
+		i4 := en0.FindIP(net.ParseIP("192.168.1.10"))
+		if assert.NotEqual(t, -1, i4) {
+			ipv4 := en0.IPAddresses[i4]
+			assert.Equal(t, "192.168.1.10/24", ipv4.CIDR)
+			assert.Equal(t, "192.168.1.0/24", ipv4.Subnet)
+			assert.Equal(t, "192.168.1.255", ipv4.Broadcast)
+			assert.Equal(t, "192.168.1.1", ipv4.Gateway)
+		}
+		i6 := en0.FindIP(net.ParseIP("fe80::250:56ff:feb0:9aa5"))
+		if assert.NotEqual(t, -1, i6) {
+			ipv6 := en0.IPAddresses[i6]
+			assert.Equal(t, "fe80::250:56ff:feb0:9aa5/64", ipv6.CIDR)
+			assert.Equal(t, "fe80::/64", ipv6.Subnet)
+			assert.Equal(t, "fe80::1", ipv6.Gateway)
+		}
+	}
+
+	// en1 — declared but down; no addresses, MAC absent (no link# row).
+	index = subject.FindInterface(interfaces, subject.Interface{Name: "en1"})
+	if assert.NotEqual(t, -1, index) {
+		en1 := interfaces[index]
+		if assert.NotNil(t, en1.Active) {
+			assert.False(t, *en1.Active)
+		}
+		assert.Empty(t, en1.IPAddresses)
+	}
+
+	// lo0 — has link#1 row but no MAC field; MTU still picked up.
+	index = subject.FindInterface(interfaces, subject.Interface{Name: "lo0"})
+	if assert.NotEqual(t, -1, index) {
+		lo0 := interfaces[index]
+		assert.Equal(t, "", lo0.MACAddress)
+		assert.Equal(t, 16896, lo0.MTU)
+		assert.Contains(t, lo0.Flags, "LOOPBACK")
+	}
+}

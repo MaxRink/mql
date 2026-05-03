@@ -1,0 +1,20 @@
+[commands."ifconfig -a"]
+stdout = """
+en0: flags=1e080863,c0<UP,BROADCAST,NOTRAILERS,RUNNING,SIMPLEX,MULTICAST,GROUPRT,64BIT,CHECKSUM_OFFLOAD(ACTIVE),CHAIN>
+        inet 192.168.1.10 netmask 0xffffff00 broadcast 192.168.1.255
+        inet6 fe80::250:56ff:feb0:9aa5/64
+         tcp_sendspace 262144 tcp_recvspace 262144 rfc1323 1
+lo0: flags=e08084b,c0<UP,BROADCAST,LOOPBACK,RUNNING,SIMPLEX,MULTICAST,GROUPRT,64BIT,LARGESEND,CHAIN>
+        inet 127.0.0.1 netmask 0xff000000 broadcast 127.255.255.255
+        inet6 ::1%1/0
+         tcp_sendspace 131072 tcp_recvspace 131072 rfc1323 1
+"""
+
+[commands."netstat -in"]
+stdout = """
+Name  Mtu   Network     Address               Ipkts Ierrs    Opkts Oerrs  Coll
+en0   1500  link#2      0.50.56.b0.9a.a5     1234567     0   765432     0     0
+en0   1500  192.168.1   192.168.1.10         1234567     0   765432     0     0
+lo0   16896 link#1                              12345     0    12345     0     0
+lo0   16896 127         127.0.0.1               12345     0    12345     0     0
+"""

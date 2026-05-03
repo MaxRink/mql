@@ -123,6 +123,36 @@ func TestLinuxRemoteInterface(t *testing.T) {
 	assert.Equal(t, "10.128.0.4", ip)
 }
 
+func TestAIXRemoteInterface(t *testing.T) {
+	mock, err := mock.New(0, &inventory.Asset{
+		Platform: &inventory.Platform{
+			Name:   "aix",
+			Family: []string{"unix"},
+		},
+	}, mock.WithPath("./testdata/aix.toml"))
+	require.NoError(t, err)
+
+	ifaces := networkinterface.New(mock)
+	list, err := ifaces.Interfaces()
+	require.NoError(t, err)
+	assert.Equal(t, 2, len(list))
+
+	en0 := list[0]
+	assert.Equal(t, "en0", en0.Name)
+	assert.Equal(t, 1500, en0.MTU)
+	assert.Equal(t, "00:50:56:b0:9a:a5", en0.HardwareAddr.String())
+	assert.Equal(t, "up|broadcast|multicast", en0.Flags.String())
+	assert.Equal(t, 2, len(en0.Addrs))
+
+	lo0 := list[1]
+	assert.Equal(t, "lo0", lo0.Name)
+	assert.Equal(t, 16896, lo0.MTU)
+	// lo0 has no MAC on the link# row in `netstat -in`
+	assert.Equal(t, "", lo0.HardwareAddr.String())
+	assert.Equal(t, "up|broadcast|loopback|multicast", lo0.Flags.String())
+	assert.Equal(t, 2, len(lo0.Addrs))
+}
+
 func TestLinuxRemoteInterfaceFlannel(t *testing.T) {
 	mock, err := mock.New(0, &inventory.Asset{
 		Platform: &inventory.Platform{
