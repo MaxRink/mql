@@ -460,7 +460,7 @@ gcp.project @defaults("name number") {
   primitiveRoleBindings() []gcp.resourcemanager.binding
   // Audit logging configuration
   auditConfig() []gcp.resourcemanager.auditConfig
-  // Whether DATA_READ and DATA_WRITE audit logging is enabled for allServices with no exempted members (CIS 2.1)
+  // Whether DATA_READ and DATA_WRITE audit logging is enabled for allServices with no exempted members
   dataAccessLoggingEnabled() bool
   // Organization policies
   orgPolicies() []gcp.orgPolicy
