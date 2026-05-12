@@ -26,13 +26,30 @@ func parseJamfTime(s string) *time.Time {
 	return &t
 }
 
+// inventorySections lists the Jamf inventory sections we expose. Without
+// this filter the API returns every section per record (applications,
+// certificates, configuration profiles, fonts, group memberships, package
+// receipts, software updates, …) — payloads that are routinely 100x the
+// data we use.
+var inventorySections = []string{
+	"GENERAL",
+	"HARDWARE",
+	"OPERATING_SYSTEM",
+	"SECURITY",
+	"LOCAL_USER_ACCOUNTS",
+}
+
 func (r *mqlJamf) computerInventory() ([]interface{}, error) {
 	conn := r.MqlRuntime.Connection.(*connection.JamfConnection)
 	client := conn.Client
 
 	// The SDK's GetComputersInventory paginates through all pages internally,
 	// so a single call returns every inventory record.
-	inventory, err := client.GetComputersInventory(url.Values{})
+	params := url.Values{}
+	for _, s := range inventorySections {
+		params.Add("section", s)
+	}
+	inventory, err := client.GetComputersInventory(params)
 	if err != nil {
 		return nil, err
 	}

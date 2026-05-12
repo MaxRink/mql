@@ -4,8 +4,6 @@
 package resources
 
 import (
-	"errors"
-
 	"go.mondoo.com/mql/v13/llx"
 	"go.mondoo.com/mql/v13/providers-sdk/v1/plugin"
 	"go.mondoo.com/mql/v13/providers/jamf/connection"
@@ -16,9 +14,15 @@ func (u *mqlJamfUserByName) id() (string, error) {
 }
 
 func initJamfUserByName(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error) {
+	// Already populated (e.g., from a recording or a previous fetch) — skip the API call.
+	if len(args) > 1 {
+		return args, nil, nil
+	}
+
 	nameArg, ok := args["name"]
 	if !ok || nameArg.Value == nil {
-		return nil, nil, errors.New("missing required argument: name")
+		// Bare resource access is a valid empty state, not an error.
+		return args, nil, nil
 	}
 	name := nameArg.Value.(string)
 
@@ -28,9 +32,6 @@ func initJamfUserByName(runtime *plugin.Runtime, args map[string]*llx.RawData) (
 	user, err := client.GetUserByName(name)
 	if err != nil {
 		return nil, nil, err
-	}
-	if user == nil {
-		return nil, nil, errors.New("user not found: " + name)
 	}
 
 	args["__id"] = llx.StringData("jamf.userByName/" + user.Name)
@@ -42,9 +43,5 @@ func initJamfUserByName(runtime *plugin.Runtime, args map[string]*llx.RawData) (
 	args["position"] = llx.StringData(user.Position)
 	args["enableCustomPhoto"] = llx.BoolData(user.EnableCustomPhoto)
 
-	res, err := CreateResource(runtime, "jamf.userByName", args)
-	if err != nil {
-		return nil, nil, err
-	}
-	return args, res, nil
+	return args, nil, nil
 }

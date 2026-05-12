@@ -3,6 +3,6 @@
 
 package resources
 
-func (k *mqlJamf) id() (string, error) {
+func (r *mqlJamf) id() (string, error) {
 	return "jamf", nil
 }
