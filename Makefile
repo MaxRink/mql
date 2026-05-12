@@ -238,6 +238,7 @@ PROVIDERS := \
 	shodan \
 	slack \
 	snowflake \
+	stackit \
 	tailscale \
 	terraform \
 	vcd \
