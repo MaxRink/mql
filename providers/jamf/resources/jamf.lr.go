@@ -151,8 +151,8 @@ var getDataFields = map[string]func(r plugin.Resource) *plugin.DataRes{
 	"jamf.users": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamf).GetUsers()).ToDataRes(types.Array(types.Resource("jamf.user")))
 	},
-	"jamf.smartGroups": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamf).GetSmartGroups()).ToDataRes(types.Array(types.Resource("jamf.computerGroup")))
+	"jamf.computerGroups": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamf).GetComputerGroups()).ToDataRes(types.Array(types.Resource("jamf.computerGroup")))
 	},
 	"jamf.userByName.id": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfUserByName).GetId()).ToDataRes(types.Int)
@@ -355,8 +355,8 @@ var getDataFields = map[string]func(r plugin.Resource) *plugin.DataRes{
 	"jamf.package.fileName": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfPackage).GetFileName()).ToDataRes(types.String)
 	},
-	"jamf.package.oSInstall": func(r plugin.Resource) *plugin.DataRes {
-		return (r.(*mqlJamfPackage).GetOSInstall()).ToDataRes(types.Bool)
+	"jamf.package.osInstall": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlJamfPackage).GetOsInstall()).ToDataRes(types.Bool)
 	},
 	"jamf.package.categoryId": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlJamfPackage).GetCategoryId()).ToDataRes(types.String)
@@ -410,8 +410,8 @@ var setDataFields = map[string]func(r plugin.Resource, v *llx.RawData) bool{
 		r.(*mqlJamf).Users, ok = plugin.RawToTValue[[]any](v.Value, v.Error)
 		return
 	},
-	"jamf.smartGroups": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamf).SmartGroups, ok = plugin.RawToTValue[[]any](v.Value, v.Error)
+	"jamf.computerGroups": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamf).ComputerGroups, ok = plugin.RawToTValue[[]any](v.Value, v.Error)
 		return
 	},
 	"jamf.userByName.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
@@ -710,8 +710,8 @@ var setDataFields = map[string]func(r plugin.Resource, v *llx.RawData) bool{
 		r.(*mqlJamfPackage).FileName, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
-	"jamf.package.oSInstall": func(r plugin.Resource, v *llx.RawData) (ok bool) {
-		r.(*mqlJamfPackage).OSInstall, ok = plugin.RawToTValue[bool](v.Value, v.Error)
+	"jamf.package.osInstall": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlJamfPackage).OsInstall, ok = plugin.RawToTValue[bool](v.Value, v.Error)
 		return
 	},
 	"jamf.package.categoryId": func(r plugin.Resource, v *llx.RawData) (ok bool) {
@@ -765,7 +765,7 @@ type mqlJamf struct {
 	Sso                    plugin.TValue[*mqlJamfSsoSettings]
 	Version                plugin.TValue[string]
 	Users                  plugin.TValue[[]any]
-	SmartGroups            plugin.TValue[[]any]
+	ComputerGroups         plugin.TValue[[]any]
 }
 
 // createJamf creates a new instance of this resource
@@ -881,10 +881,10 @@ func (c *mqlJamf) GetUsers() *plugin.TValue[[]any] {
 	})
 }
 
-func (c *mqlJamf) GetSmartGroups() *plugin.TValue[[]any] {
-	return plugin.GetOrCompute[[]any](&c.SmartGroups, func() ([]any, error) {
+func (c *mqlJamf) GetComputerGroups() *plugin.TValue[[]any] {
+	return plugin.GetOrCompute[[]any](&c.ComputerGroups, func() ([]any, error) {
 		if c.MqlRuntime.HasRecording {
-			d, err := c.MqlRuntime.FieldResourceFromRecording("jamf", c.__id, "smartGroups")
+			d, err := c.MqlRuntime.FieldResourceFromRecording("jamf", c.__id, "computerGroups")
 			if err != nil {
 				return nil, err
 			}
@@ -893,7 +893,7 @@ func (c *mqlJamf) GetSmartGroups() *plugin.TValue[[]any] {
 			}
 		}
 
-		return c.smartGroups()
+		return c.computerGroups()
 	})
 }
 
@@ -1496,7 +1496,7 @@ type mqlJamfPackage struct {
 	Id                   plugin.TValue[string]
 	Name                 plugin.TValue[string]
 	FileName             plugin.TValue[string]
-	OSInstall            plugin.TValue[bool]
+	OsInstall            plugin.TValue[bool]
 	CategoryId           plugin.TValue[string]
 	Priority             plugin.TValue[int64]
 	SuppressUpdates      plugin.TValue[bool]
@@ -1552,8 +1552,8 @@ func (c *mqlJamfPackage) GetFileName() *plugin.TValue[string] {
 	return &c.FileName
 }
 
-func (c *mqlJamfPackage) GetOSInstall() *plugin.TValue[bool] {
-	return &c.OSInstall
+func (c *mqlJamfPackage) GetOsInstall() *plugin.TValue[bool] {
+	return &c.OsInstall
 }
 
 func (c *mqlJamfPackage) GetCategoryId() *plugin.TValue[string] {

@@ -10,7 +10,7 @@ import (
 	"go.mondoo.com/mql/v13/providers/jamf/connection"
 )
 
-func (r *mqlJamf) smartGroups() ([]interface{}, error) {
+func (r *mqlJamf) computerGroups() ([]interface{}, error) {
 	conn := r.MqlRuntime.Connection.(*connection.JamfConnection)
 	client := conn.Client
 

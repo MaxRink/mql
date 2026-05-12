@@ -31,8 +31,8 @@ jamf {
   // Retrieve a list of all user accounts configured in Jamf Pro
   users() []jamf.user
 
-  // Retrieve a list of computer smart groups
-  smartGroups() []jamf.computerGroup
+  // Retrieve all computer groups (both smart and static); inspect the `smartGroup` field on each entry to distinguish the two
+  computerGroups() []jamf.computerGroup
 }
 
 // Jamf Pro user lookup by username
@@ -266,7 +266,7 @@ private jamf.package @defaults("name fileName") {
   fileName string
 
   // Whether this is an OS installer
-  oSInstall bool
+  osInstall bool
 
   // ID of the category assigned to the package
   categoryId string

@@ -12,6 +12,8 @@ func (r *mqlJamf) packages() ([]interface{}, error) {
 	conn := r.MqlRuntime.Connection.(*connection.JamfConnection)
 	client := conn.Client
 
+	// GetPackages paginates through every page internally and returns the
+	// full set of results, so a single call here is the complete inventory.
 	inventory, err := client.GetPackages("id:asc", "")
 	if err != nil {
 		return nil, err
@@ -26,7 +28,7 @@ func (r *mqlJamf) packages() ([]interface{}, error) {
 			"id":                   llx.StringData(c.ID),
 			"name":                 llx.StringData(c.PackageName),
 			"fileName":             llx.StringData(c.FileName),
-			"oSInstall":            llx.BoolDataPtr(c.OSInstall),
+			"osInstall":            llx.BoolDataPtr(c.OSInstall),
 			"categoryId":           llx.StringData(c.CategoryID),
 			"priority":             llx.IntData(c.Priority),
 			"suppressUpdates":      llx.BoolDataPtr(c.SuppressUpdates),

@@ -5,7 +5,6 @@ package resources
 
 import (
 	"net/url"
-	"strconv"
 	"time"
 
 	"github.com/deploymenttheory/go-api-sdk-jamfpro/sdk/jamfpro"
@@ -31,66 +30,53 @@ func (r *mqlJamf) computerInventory() ([]interface{}, error) {
 	conn := r.MqlRuntime.Connection.(*connection.JamfConnection)
 	client := conn.Client
 
-	const pageSize = 100
-	var res []interface{}
-	page := 0
+	// The SDK's GetComputersInventory paginates through all pages internally,
+	// so a single call returns every inventory record.
+	inventory, err := client.GetComputersInventory(url.Values{})
+	if err != nil {
+		return nil, err
+	}
+	if inventory == nil {
+		return nil, nil
+	}
 
-	for {
-		params := url.Values{}
-		params.Set("page", strconv.Itoa(page))
-		params.Set("page-size", strconv.Itoa(pageSize))
+	res := make([]interface{}, 0, len(inventory.Results))
+	for _, c := range inventory.Results {
+		conn.CacheLocalUserAccounts(c.ID, c.LocalUserAccounts)
 
-		inventory, err := client.GetComputersInventory(params)
+		item, err := CreateResource(r.MqlRuntime, "jamf.computer", map[string]*llx.RawData{
+			"id":                                   llx.StringData(c.ID),
+			"name":                                 llx.StringData(c.General.Name),
+			"make":                                 llx.StringData(c.Hardware.Make),
+			"model":                                llx.StringData(c.Hardware.Model),
+			"operatingSystemName":                  llx.StringData(c.OperatingSystem.Name),
+			"operatingSystemVersion":               llx.StringData(c.OperatingSystem.Version),
+			"macAddress":                           llx.StringData(c.Hardware.MacAddress),
+			"serialNumber":                         llx.StringData(c.Hardware.SerialNumber),
+			"processorType":                        llx.StringData(c.Hardware.ProcessorType),
+			"processorCount":                       llx.IntData(c.Hardware.ProcessorCount),
+			"coreCount":                            llx.IntData(c.Hardware.CoreCount),
+			"totalRamMegabytes":                    llx.IntData(c.Hardware.TotalRamMegabytes),
+			"lastIpAddress":                        llx.StringData(c.General.LastIpAddress),
+			"lastReportedIp":                       llx.StringData(c.General.LastReportedIp),
+			"jamfBinaryVersion":                    llx.StringData(c.General.JamfBinaryVersion),
+			"platform":                             llx.StringData(c.General.Platform),
+			"reportDate":                           llx.TimeDataPtr(parseJamfTime(c.General.ReportDate)),
+			"lastContactTime":                      llx.TimeDataPtr(parseJamfTime(c.General.LastContactTime)),
+			"lastEnrolledDate":                     llx.TimeDataPtr(parseJamfTime(c.General.LastEnrolledDate)),
+			"initialEntryDate":                     llx.TimeDataPtr(parseJamfTime(c.General.InitialEntryDate)),
+			"itunesStoreAccountActive":             llx.BoolData(c.General.ItunesStoreAccountActive),
+			"enrolledViaAutomatedDeviceEnrollment": llx.BoolData(c.General.EnrolledViaAutomatedDeviceEnrollment),
+			"fileVault2Enabled":                    llx.StringData(c.OperatingSystem.FileVault2Status),
+			"autoLoginDisabled":                    llx.BoolData(c.Security.AutoLoginDisabled),
+			"activationLockEnabled":                llx.BoolData(c.Security.ActivationLockEnabled),
+			"firewallEnabled":                      llx.BoolData(c.Security.FirewallEnabled),
+		})
 		if err != nil {
 			return nil, err
 		}
-		if inventory == nil || len(inventory.Results) == 0 {
-			break
-		}
-
-		for _, c := range inventory.Results {
-			conn.CacheLocalUserAccounts(c.ID, c.LocalUserAccounts)
-
-			item, err := CreateResource(r.MqlRuntime, "jamf.computer", map[string]*llx.RawData{
-				"id":                                   llx.StringData(c.ID),
-				"name":                                 llx.StringData(c.General.Name),
-				"make":                                 llx.StringData(c.Hardware.Make),
-				"model":                                llx.StringData(c.Hardware.Model),
-				"operatingSystemName":                  llx.StringData(c.OperatingSystem.Name),
-				"operatingSystemVersion":               llx.StringData(c.OperatingSystem.Version),
-				"macAddress":                           llx.StringData(c.Hardware.MacAddress),
-				"serialNumber":                         llx.StringData(c.Hardware.SerialNumber),
-				"processorType":                        llx.StringData(c.Hardware.ProcessorType),
-				"processorCount":                       llx.IntData(c.Hardware.ProcessorCount),
-				"coreCount":                            llx.IntData(c.Hardware.CoreCount),
-				"totalRamMegabytes":                    llx.IntData(c.Hardware.TotalRamMegabytes),
-				"lastIpAddress":                        llx.StringData(c.General.LastIpAddress),
-				"lastReportedIp":                       llx.StringData(c.General.LastReportedIp),
-				"jamfBinaryVersion":                    llx.StringData(c.General.JamfBinaryVersion),
-				"platform":                             llx.StringData(c.General.Platform),
-				"reportDate":                           llx.TimeDataPtr(parseJamfTime(c.General.ReportDate)),
-				"lastContactTime":                      llx.TimeDataPtr(parseJamfTime(c.General.LastContactTime)),
-				"lastEnrolledDate":                     llx.TimeDataPtr(parseJamfTime(c.General.LastEnrolledDate)),
-				"initialEntryDate":                     llx.TimeDataPtr(parseJamfTime(c.General.InitialEntryDate)),
-				"itunesStoreAccountActive":             llx.BoolData(c.General.ItunesStoreAccountActive),
-				"enrolledViaAutomatedDeviceEnrollment": llx.BoolData(c.General.EnrolledViaAutomatedDeviceEnrollment),
-				"fileVault2Enabled":                    llx.StringData(c.OperatingSystem.FileVault2Status),
-				"autoLoginDisabled":                    llx.BoolData(c.Security.AutoLoginDisabled),
-				"activationLockEnabled":                llx.BoolData(c.Security.ActivationLockEnabled),
-				"firewallEnabled":                      llx.BoolData(c.Security.FirewallEnabled),
-			})
-			if err != nil {
-				return nil, err
-			}
-			res = append(res, item)
-		}
-
-		if len(res) >= inventory.TotalCount {
-			break
-		}
-		page++
+		res = append(res, item)
 	}
-
 	return res, nil
 }
 
