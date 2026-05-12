@@ -4,7 +4,14 @@
 option provider = "go.mondoo.com/mql/v13/providers/jamf"
 option go_package = "go.mondoo.com/mql/v13/providers/jamf/resources"
 
-// Gather Jamf Pro Information
+// Jamf Pro
+//
+// Use this resource to query a Jamf Pro instance — the computer inventory
+// (hardware, OS, security posture, enrollment state, local user accounts),
+// the software package catalog, SSO configuration, smart and static
+// computer groups, and the Jamf user directory. The Jamf Pro server
+// version is also available via `version`. Sub-resources are populated
+// from the Jamf Pro API and respect the credentials used to connect.
 jamf {
   // Retrieve a list of all computers in the Jamf Pro inventory
   computerInventory() []jamf.computer
@@ -28,7 +35,13 @@ jamf {
   smartGroups() []jamf.computerGroup
 }
 
-// Retrieve a Jamf user by their username
+// Jamf Pro user lookup by username
+//
+// Examine a single Jamf user identified by username — full name, email,
+// phone, position, and whether a custom photo is enabled. The `name`
+// field selects the user, for example
+// `jamf.userByName(name: "jsmith") { email position }`. Use `jamf.users`
+// when you need to iterate every user instead of looking one up by name.
 jamf.userByName @defaults("name email fullName") {
   // Initialize the resource using the username
   init(name string)

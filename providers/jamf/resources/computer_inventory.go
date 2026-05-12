@@ -49,8 +49,6 @@ func (r *mqlJamf) computerInventory() ([]interface{}, error) {
 		}
 
 		for _, c := range inventory.Results {
-			// Cache local user accounts from the bulk fetch so that
-			// localUserAccounts() can return them without an extra API call.
 			conn.CacheLocalUserAccounts(c.ID, c.LocalUserAccounts)
 
 			item, err := CreateResource(r.MqlRuntime, "jamf.computer", map[string]*llx.RawData{
@@ -103,12 +101,10 @@ func (c *mqlJamfComputer) id() (string, error) {
 func (c *mqlJamfComputer) localUserAccounts() ([]interface{}, error) {
 	conn := c.MqlRuntime.Connection.(*connection.JamfConnection)
 
-	// Use cached data from the initial inventory fetch if available.
 	if cached, ok := conn.GetCachedLocalUserAccounts(c.Id.Data); ok {
-		return createLocalUserAccountResources(c.MqlRuntime, cached)
+		return createLocalUserAccountResources(c.MqlRuntime, c.Id.Data, cached)
 	}
 
-	// Fallback to individual API call for computers not fetched via bulk inventory.
 	client := conn.Client
 	inventory, err := client.GetComputerInventoryByID(c.Id.Data)
 	if err != nil {
@@ -117,13 +113,14 @@ func (c *mqlJamfComputer) localUserAccounts() ([]interface{}, error) {
 	if inventory == nil {
 		return nil, nil
 	}
-	return createLocalUserAccountResources(c.MqlRuntime, inventory.LocalUserAccounts)
+	return createLocalUserAccountResources(c.MqlRuntime, c.Id.Data, inventory.LocalUserAccounts)
 }
 
-func createLocalUserAccountResources(runtime *plugin.Runtime, accounts []jamfpro.ComputerInventorySubsetLocalUserAccount) ([]interface{}, error) {
+func createLocalUserAccountResources(runtime *plugin.Runtime, computerID string, accounts []jamfpro.ComputerInventorySubsetLocalUserAccount) ([]interface{}, error) {
 	var res []interface{}
 	for _, user := range accounts {
 		item, err := CreateResource(runtime, "jamf.localUserAccount", map[string]*llx.RawData{
+			"__id":                         llx.StringData("jamf.localUserAccount/" + computerID + "/" + user.UID + "/" + user.Username),
 			"uid":                          llx.StringData(user.UID),
 			"username":                     llx.StringData(user.Username),
 			"fullName":                     llx.StringData(user.FullName),

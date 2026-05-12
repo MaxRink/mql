@@ -37,9 +37,9 @@ func (s *Service) ParseCLI(req *plugin.ParseCLIReq) (*plugin.ParseCLIRes, error)
 	}
 
 	// Resolve credentials: flags take precedence over env vars
-	clientId := flagOrEnv(flags, "client-id", "CLIENT_ID")
-	clientSecret := flagOrEnv(flags, "client-secret", "CLIENT_SECRET")
-	instanceDomain := flagOrEnv(flags, "instance-domain", "INSTANCE_DOMAIN")
+	clientId := flagOrEnv(flags, "client-id", "JAMF_CLIENT_ID")
+	clientSecret := flagOrEnv(flags, "client-secret", "JAMF_CLIENT_SECRET")
+	instanceDomain := flagOrEnv(flags, "instance-domain", "JAMF_INSTANCE_DOMAIN")
 
 	conf := &inventory.Config{
 		Type: req.Connector,

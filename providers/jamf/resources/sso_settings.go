@@ -9,6 +9,10 @@ import (
 	"go.mondoo.com/mql/v13/providers/jamf/connection"
 )
 
+func (s *mqlJamfSsoSettings) id() (string, error) {
+	return "jamf.ssoSettings", nil
+}
+
 func (r *mqlJamf) sso() (*mqlJamfSsoSettings, error) {
 	conn := r.MqlRuntime.Connection.(*connection.JamfConnection)
 	client := conn.Client
@@ -23,15 +27,16 @@ func (r *mqlJamf) sso() (*mqlJamfSsoSettings, error) {
 	}
 
 	res, err := CreateResource(r.MqlRuntime, "jamf.ssoSettings", map[string]*llx.RawData{
-		"ssoEnabled":                                     llx.BoolData(info.SsoEnabled),
-		"ssoForEnrollmentEnabled":                        llx.BoolData(info.SsoForEnrollmentEnabled),
-		"ssoBypassAllowed":                               llx.BoolData(info.SsoBypassAllowed),
-		"sessionTimeout":                                 llx.IntData(info.SessionTimeout),
-		"ssoForMacOsSelfServiceEnabled":                  llx.BoolData(info.SsoForMacOsSelfServiceEnabled),
-		"tokenExpirationDisabled":                        llx.BoolData(info.TokenExpirationDisabled),
-		"userAttributeEnabled":                           llx.BoolData(info.UserAttributeEnabled),
-		"userAttributeName":                              llx.StringData(info.UserAttributeName),
-		"userMapping":                                    llx.StringData(info.UserMapping),
+		"__id":                          llx.StringData("jamf.ssoSettings"),
+		"ssoEnabled":                    llx.BoolData(info.SsoEnabled),
+		"ssoForEnrollmentEnabled":       llx.BoolData(info.SsoForEnrollmentEnabled),
+		"ssoBypassAllowed":              llx.BoolData(info.SsoBypassAllowed),
+		"sessionTimeout":                llx.IntData(info.SessionTimeout),
+		"ssoForMacOsSelfServiceEnabled": llx.BoolData(info.SsoForMacOsSelfServiceEnabled),
+		"tokenExpirationDisabled":       llx.BoolData(info.TokenExpirationDisabled),
+		"userAttributeEnabled":          llx.BoolData(info.UserAttributeEnabled),
+		"userAttributeName":             llx.StringData(info.UserAttributeName),
+		"userMapping":                   llx.StringData(info.UserMapping),
 		"enrollmentSsoForAccountDrivenEnrollmentEnabled": llx.BoolData(info.EnrollmentSsoForAccountDrivenEnrollmentEnabled),
 		"idpUrl":                       llx.StringData(info.IdpUrl),
 		"idpProviderType":              llx.StringData(info.IdpProviderType),

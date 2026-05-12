@@ -6,6 +6,7 @@ package connection
 import (
 	"errors"
 	"strings"
+	"sync"
 
 	"github.com/deploymenttheory/go-api-sdk-jamfpro/sdk/jamfpro"
 	"github.com/rs/zerolog/log"
@@ -23,7 +24,8 @@ type JamfConnection struct {
 	// localUserAccounts caches per-computer local user accounts from the
 	// initial inventory fetch, keyed by computer ID. This avoids N+1 API
 	// calls when iterating computerInventory then accessing localUserAccounts.
-	localUserAccounts map[string][]jamfpro.ComputerInventorySubsetLocalUserAccount
+	localUserAccountsMu sync.RWMutex
+	localUserAccounts   map[string][]jamfpro.ComputerInventorySubsetLocalUserAccount
 }
 
 func NewJamfConnection(id uint32, asset *inventory.Asset, conf *inventory.Config) (*JamfConnection, error) {
@@ -98,12 +100,16 @@ func (j *JamfConnection) Identifier() string {
 // CacheLocalUserAccounts stores local user accounts for a computer ID,
 // populated during the initial inventory fetch.
 func (j *JamfConnection) CacheLocalUserAccounts(computerID string, accounts []jamfpro.ComputerInventorySubsetLocalUserAccount) {
+	j.localUserAccountsMu.Lock()
+	defer j.localUserAccountsMu.Unlock()
 	j.localUserAccounts[computerID] = accounts
 }
 
 // GetCachedLocalUserAccounts retrieves cached local user accounts for a
 // computer ID. Returns nil, false if no cache entry exists.
 func (j *JamfConnection) GetCachedLocalUserAccounts(computerID string) ([]jamfpro.ComputerInventorySubsetLocalUserAccount, bool) {
+	j.localUserAccountsMu.RLock()
+	defer j.localUserAccountsMu.RUnlock()
 	accounts, ok := j.localUserAccounts[computerID]
 	return accounts, ok
 }

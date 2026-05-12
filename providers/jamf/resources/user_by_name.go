@@ -11,6 +11,10 @@ import (
 	"go.mondoo.com/mql/v13/providers/jamf/connection"
 )
 
+func (u *mqlJamfUserByName) id() (string, error) {
+	return "jamf.userByName/" + u.Name.Data, nil
+}
+
 func initJamfUserByName(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error) {
 	nameArg, ok := args["name"]
 	if !ok || nameArg.Value == nil {
@@ -29,6 +33,7 @@ func initJamfUserByName(runtime *plugin.Runtime, args map[string]*llx.RawData) (
 		return nil, nil, errors.New("user not found: " + name)
 	}
 
+	args["__id"] = llx.StringData("jamf.userByName/" + user.Name)
 	args["id"] = llx.IntData(user.ID)
 	args["name"] = llx.StringData(user.Name)
 	args["fullName"] = llx.StringData(user.FullName)

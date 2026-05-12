@@ -75,9 +75,9 @@ func TestParseCLI_PartialFlags(t *testing.T) {
 }
 
 func TestParseCLI_EnvVarFallback(t *testing.T) {
-	t.Setenv("CLIENT_ID", "env-client-id")
-	t.Setenv("CLIENT_SECRET", "env-client-secret")
-	t.Setenv("INSTANCE_DOMAIN", "https://env.jamfcloud.com")
+	t.Setenv("JAMF_CLIENT_ID", "env-client-id")
+	t.Setenv("JAMF_CLIENT_SECRET", "env-client-secret")
+	t.Setenv("JAMF_INSTANCE_DOMAIN", "https://env.jamfcloud.com")
 
 	s := Init()
 
@@ -96,8 +96,8 @@ func TestParseCLI_EnvVarFallback(t *testing.T) {
 }
 
 func TestParseCLI_FlagsTakePrecedenceOverEnv(t *testing.T) {
-	t.Setenv("CLIENT_ID", "env-client-id")
-	t.Setenv("INSTANCE_DOMAIN", "https://env.jamfcloud.com")
+	t.Setenv("JAMF_CLIENT_ID", "env-client-id")
+	t.Setenv("JAMF_INSTANCE_DOMAIN", "https://env.jamfcloud.com")
 
 	s := Init()
 
