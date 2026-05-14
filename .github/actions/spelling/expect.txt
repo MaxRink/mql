@@ -136,7 +136,13 @@ notif
 nsrecord
 nss
 oidc
+OMA
 ollama
+onboarded
+onboards
+ondemand
+oneof
+ontap
 opcplc
 openai
 opensearch
