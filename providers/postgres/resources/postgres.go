@@ -16,9 +16,6 @@ import (
 	"go.mondoo.com/mql/v13/types"
 )
 
-// silence unused-import linting in case we trim later
-var _ = errors.New
-
 // id returns the cache key for the singleton postgresql resource. The asset
 // identity already encodes the host/port/database, so a static string is
 // stable and unique within the runtime.
@@ -808,32 +805,9 @@ func stringsToAny(in []string) []any {
 // blank (e.g. an error row from pg_hba_file_rules with no line context).
 func file_lineID(resource, file string, line int64, idx int) string {
 	if file == "" {
-		return resource + "/idx/" + strFromInt(idx)
+		return resource + "/idx/" + strconv.Itoa(idx)
 	}
-	return resource + "/" + file + ":" + strFromInt(int(line)) + "/" + strFromInt(idx)
-}
-
-func strFromInt(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	neg := false
-	if i < 0 {
-		neg = true
-		i = -i
-	}
-	var buf [20]byte
-	pos := len(buf)
-	for i > 0 {
-		pos--
-		buf[pos] = byte('0' + i%10)
-		i /= 10
-	}
-	if neg {
-		pos--
-		buf[pos] = '-'
-	}
-	return string(buf[pos:])
+	return resource + "/" + file + ":" + strconv.Itoa(int(line)) + "/" + strconv.Itoa(idx)
 }
 
 // optionsListToMap turns the libpq-style ["key=value", "flag"] options array

@@ -47,6 +47,12 @@ var postgresqlConfPaths = []string{
 
 type mqlPostgresqlConfInternal struct {
 	lock sync.Mutex
+	// parsed flips to true once parse() has run to completion (whether the
+	// outcome was data, empty, or an error). It's a dedicated flag rather
+	// than overloading `s.Params.State` because the empty- and error-paths
+	// set extra state bits (StateIsNull) that the previous equality guard
+	// failed to recognise as "already parsed", causing infinite re-parses.
+	parsed bool
 }
 
 func initPostgresqlConf(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error) {
@@ -104,9 +110,13 @@ func (s *mqlPostgresqlConf) file() (*mqlFile, error) {
 func (s *mqlPostgresqlConf) parse(file *mqlFile) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if s.Params.State == plugin.StateIsSet {
+	if s.parsed {
 		return nil
 	}
+	// Flip the guard before any early-return path so transient empty/error
+	// outcomes don't trigger an infinite re-parse loop on subsequent field
+	// accesses.
+	s.parsed = true
 
 	if file == nil {
 		s.setConfEmpty()

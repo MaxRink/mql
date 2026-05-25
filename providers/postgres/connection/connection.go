@@ -6,7 +6,6 @@ package connection
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"net"
 	"net/url"
 	"strconv"
@@ -341,6 +340,3 @@ func (c *PostgresConnection) HostPort() string {
 	}
 	return net.JoinHostPort(host, strconv.Itoa(port))
 }
-
-// Ensure unused error variable does not break import.
-var _ = errors.New
