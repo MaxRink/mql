@@ -230,6 +230,7 @@ use (
    ./mql/providers/opcua
    ./mql/providers/openai
    ./mql/providers/openstack
+   ./mql/providers/postgres
    ./mql/providers/proxmox
    ./mql/providers/shodan
    ./mql/providers/slack
