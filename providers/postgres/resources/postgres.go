@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.mondoo.com/mql/v13/llx"
 	"go.mondoo.com/mql/v13/providers/postgres/connection"
 	"go.mondoo.com/mql/v13/types"
@@ -413,11 +414,13 @@ SELECT
 FROM pg_catalog.pg_hba_file_rules
 ORDER BY rule_number`)
 	if err != nil {
-		if !strings.Contains(err.Error(), "rule_number") {
+		// Fall back without rule_number ordering on PG < 16 where the column
+		// doesn't exist. The driver surfaces this as PgError code 42703
+		// (undefined_column); anything else is a real failure.
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || pgErr.Code != "42703" {
 			return nil, err
 		}
-		// Fall back without rule_number ordering on PG < 16 where the column
-		// doesn't exist.
 		rows, err = r.db().QueryContext(ctx, `
 SELECT
   COALESCE(line_number, 0),

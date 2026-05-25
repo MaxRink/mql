@@ -132,8 +132,8 @@ func parseConfRec(c *Conf, path string, fileReader FileReader, dirLister func(di
 // splitConfKV parses a single non-comment, non-blank postgresql.conf line
 // into a key and a value. PostgreSQL accepts either `key = value` or
 // `key value` (the `=` is optional). The value may be a bare token, a
-// number with a unit suffix, or a single-quoted string with `”` for an
-// embedded single quote.
+// number with a unit suffix, or a single-quoted string with `''` (two
+// consecutive single quotes) for an embedded single quote.
 func splitConfKV(line string) (string, string, bool) {
 	// Find the end of the key — first whitespace or '='
 	i := 0
@@ -153,7 +153,7 @@ func splitConfKV(line string) (string, string, bool) {
 }
 
 // unquoteConfValue strips surrounding single quotes from a postgresql.conf
-// value and resolves the `”` doubled-quote escape inside the string.
+// value and resolves the `''` doubled-quote escape inside the string.
 // Returned unchanged when the value isn't quoted.
 func unquoteConfValue(s string) string {
 	if len(s) < 2 || s[0] != '\'' {
