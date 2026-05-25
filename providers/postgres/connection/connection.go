@@ -223,7 +223,25 @@ func mergePasswordIntoDSN(dsn, password string) (string, error) {
 		u.User = url.UserPassword(username, password)
 		return u.String(), nil
 	}
-	return dsn + " password=" + libpqQuote(password), nil
+	// libpq key=value form. Strip any existing password= token before appending
+	// the merged one so we don't end up with two — pgx/libpq would honor the
+	// later one, but emitting duplicates is fragile and easy to misread.
+	tokens := splitKV(dsn)
+	kept := make([]string, 0, len(tokens)+1)
+	for _, tok := range tokens {
+		eq := strings.IndexByte(tok, '=')
+		if eq < 0 {
+			kept = append(kept, tok)
+			continue
+		}
+		key := strings.ToLower(strings.TrimSpace(tok[:eq]))
+		if key == "password" {
+			continue
+		}
+		kept = append(kept, tok)
+	}
+	kept = append(kept, "password="+libpqQuote(password))
+	return strings.Join(kept, " "), nil
 }
 
 func libpqQuote(s string) string {

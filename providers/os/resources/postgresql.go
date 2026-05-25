@@ -232,7 +232,7 @@ func (s *mqlPostgresqlConf) port(params map[string]any) (int64, error) {
 	}
 	n, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
-		return 0, nil
+		return 5432, nil
 	}
 	return n, nil
 }

@@ -7,6 +7,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"go.mondoo.com/mql/v13/llx"
@@ -48,23 +50,11 @@ func (r *mqlPostgresql) version() (string, error) {
 func (r *mqlPostgresql) versionNum() (int64, error) {
 	ctx, cancel := queryCtx()
 	defer cancel()
-	var v int64
-	if err := r.db().QueryRowContext(ctx, "SHOW server_version_num").Scan(&v); err != nil {
-		// SHOW returns text; some drivers refuse to scan into int64. Fall back.
-		var s string
-		if err2 := r.db().QueryRowContext(ctx, "SHOW server_version_num").Scan(&s); err2 != nil {
-			return 0, err
-		}
-		var n int64
-		for _, c := range s {
-			if c < '0' || c > '9' {
-				break
-			}
-			n = n*10 + int64(c-'0')
-		}
-		return n, nil
+	var s string
+	if err := r.db().QueryRowContext(ctx, "SHOW server_version_num").Scan(&s); err != nil {
+		return 0, err
 	}
-	return v, nil
+	return strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 }
 
 func (r *mqlPostgresql) currentDatabase() (string, error) {
@@ -426,6 +416,9 @@ SELECT
 FROM pg_catalog.pg_hba_file_rules
 ORDER BY rule_number`)
 	if err != nil {
+		if !strings.Contains(err.Error(), "rule_number") {
+			return nil, err
+		}
 		// Fall back without rule_number ordering on PG < 16 where the column
 		// doesn't exist.
 		rows, err = r.db().QueryContext(ctx, `
@@ -922,7 +915,7 @@ func parsePqArray(s string) []string {
 			quoted = !quoted
 		case c == ',' && !quoted:
 			out = append(out, string(cur))
-			cur = cur[:0]
+			cur = cur[:0:0]
 		default:
 			cur = append(cur, c)
 		}
