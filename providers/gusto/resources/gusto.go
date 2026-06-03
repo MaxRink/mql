@@ -32,14 +32,27 @@ func (g *mqlGusto) companies() ([]any, error) {
 	return out, nil
 }
 
+// getCompanies returns the companies list from the field cache, so all
+// aggregation methods share a single list fetch rather than re-listing.
+func (g *mqlGusto) getCompanies() ([]*mqlGustoCompany, error) {
+	tv := g.GetCompanies()
+	if tv.Error != nil {
+		return nil, tv.Error
+	}
+	out := make([]*mqlGustoCompany, 0, len(tv.Data))
+	for _, c := range tv.Data {
+		out = append(out, c.(*mqlGustoCompany))
+	}
+	return out, nil
+}
+
 func (g *mqlGusto) employees() ([]any, error) {
-	companies, err := g.companies()
+	companies, err := g.getCompanies()
 	if err != nil {
 		return nil, err
 	}
 	out := []any{}
-	for _, c := range companies {
-		company := c.(*mqlGustoCompany)
+	for _, company := range companies {
 		employees := company.GetEmployees()
 		if employees.Error != nil {
 			return nil, employees.Error
@@ -50,13 +63,12 @@ func (g *mqlGusto) employees() ([]any, error) {
 }
 
 func (g *mqlGusto) contractors() ([]any, error) {
-	companies, err := g.companies()
+	companies, err := g.getCompanies()
 	if err != nil {
 		return nil, err
 	}
 	out := []any{}
-	for _, c := range companies {
-		company := c.(*mqlGustoCompany)
+	for _, company := range companies {
 		contractors := company.GetContractors()
 		if contractors.Error != nil {
 			return nil, contractors.Error
@@ -67,13 +79,12 @@ func (g *mqlGusto) contractors() ([]any, error) {
 }
 
 func (g *mqlGusto) departments() ([]any, error) {
-	companies, err := g.companies()
+	companies, err := g.getCompanies()
 	if err != nil {
 		return nil, err
 	}
 	out := []any{}
-	for _, c := range companies {
-		company := c.(*mqlGustoCompany)
+	for _, company := range companies {
 		departments := company.GetDepartments()
 		if departments.Error != nil {
 			return nil, departments.Error
@@ -84,13 +95,12 @@ func (g *mqlGusto) departments() ([]any, error) {
 }
 
 func (g *mqlGusto) locations() ([]any, error) {
-	companies, err := g.companies()
+	companies, err := g.getCompanies()
 	if err != nil {
 		return nil, err
 	}
 	out := []any{}
-	for _, c := range companies {
-		company := c.(*mqlGustoCompany)
+	for _, company := range companies {
 		locations := company.GetLocations()
 		if locations.Error != nil {
 			return nil, locations.Error
@@ -101,13 +111,12 @@ func (g *mqlGusto) locations() ([]any, error) {
 }
 
 func (g *mqlGusto) admins() ([]any, error) {
-	companies, err := g.companies()
+	companies, err := g.getCompanies()
 	if err != nil {
 		return nil, err
 	}
 	out := []any{}
-	for _, c := range companies {
-		company := c.(*mqlGustoCompany)
+	for _, company := range companies {
 		admins := company.GetAdmins()
 		if admins.Error != nil {
 			return nil, admins.Error

@@ -84,7 +84,10 @@ private gusto.employee @defaults("firstName lastName workEmail") {
   preferredFirstName string
   // Work email address
   workEmail string
-  // Personal email address. Blanked when it matches `workEmail`, because Gusto exposes a single `email` field that mirrors the work address when no distinct personal email is on file.
+  // Personal email address
+  //
+  // Blanked when it matches `workEmail`, because Gusto exposes a single `email` field
+  // that mirrors the work address when no distinct personal email is on file.
   personalEmail string
   // Phone number
   phone string

@@ -121,24 +121,39 @@ func (d *mqlGustoDepartment) employees() ([]any, error) {
 }
 
 func (d *mqlGustoDepartment) contractors() ([]any, error) {
-	// When the parent department list populated contractor UUIDs, resolve
-	// each one lazily via the cached contractor list.
-	if len(d.contractorUUIDs) > 0 {
-		out := make([]any, 0, len(d.contractorUUIDs))
-		for _, uuid := range d.contractorUUIDs {
-			r, err := NewResource(d.MqlRuntime, "gusto.contractor", map[string]*llx.RawData{
-				"uuid": llx.StringData(uuid),
-			})
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, r)
+	uuids := d.contractorUUIDs
+
+	// If the Internal struct has no contractor UUIDs yet (e.g. the resource
+	// was created by a path other than newMqlGustoDepartment), re-fetch the
+	// department from the API to obtain the contractor refs. The list is
+	// cached on the connection, so this is at most one HTTP request.
+	if len(uuids) == 0 && d.CompanyUuid.Data != "" && d.Uuid.Data != "" {
+		conn := d.MqlRuntime.Connection.(*connection.GustoConnection)
+		departments, err := conn.ListDepartments(context.Background(), d.CompanyUuid.Data)
+		if err != nil {
+			return nil, err
 		}
-		return out, nil
+		for i := range departments {
+			if departments[i].UUID != d.Uuid.Data {
+				continue
+			}
+			uuids = make([]string, 0, len(departments[i].ContractorRef))
+			for _, ref := range departments[i].ContractorRef {
+				uuids = append(uuids, ref.UUID)
+			}
+			break
+		}
 	}
 
-	// Selected directly via `gusto.department(uuid: ...)` — the contractor
-	// list isn't keyed by department on Gusto's side, so an empty list is
-	// the right answer when we have no parent context.
-	return []any{}, nil
+	out := make([]any, 0, len(uuids))
+	for _, uuid := range uuids {
+		r, err := NewResource(d.MqlRuntime, "gusto.contractor", map[string]*llx.RawData{
+			"uuid": llx.StringData(uuid),
+		})
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, nil
 }
