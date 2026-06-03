@@ -2163,6 +2163,7 @@ private haproxy.config.peersSection @defaults("name") {
   params map[string]string
   // Source file path
   file string
+}
 
 // PostgreSQL postgresql.conf file
 //

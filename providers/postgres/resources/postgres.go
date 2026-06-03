@@ -537,7 +537,22 @@ ORDER BY line_number`)
 func (r *mqlPostgresql) replicationSlots() ([]any, error) {
 	ctx, cancel := queryCtx()
 	defer cancel()
-	rows, err := r.db().QueryContext(ctx, `
+
+	// wal_status was added in PG 13 and two_phase in PG 14. Try the full
+	// query first, then fall back to progressively older column sets on
+	// undefined_column (PgError code 42703).
+	type slotCols int
+	const (
+		slotColsFull    slotCols = iota // wal_status + two_phase
+		slotColsNoPhase                 // wal_status only (PG 13)
+		slotColsMinimal                 // neither column (PG < 13)
+	)
+
+	queries := []struct {
+		cols slotCols
+		sql  string
+	}{
+		{slotColsFull, `
 SELECT
   slot_name,
   COALESCE(plugin, ''),
@@ -551,7 +566,54 @@ SELECT
   COALESCE(wal_status::text, ''),
   COALESCE(two_phase, false)
 FROM pg_catalog.pg_replication_slots
-ORDER BY slot_name`)
+ORDER BY slot_name`},
+		{slotColsNoPhase, `
+SELECT
+  slot_name,
+  COALESCE(plugin, ''),
+  COALESCE(slot_type, ''),
+  COALESCE(database, ''),
+  active,
+  COALESCE(active_pid, 0),
+  temporary,
+  COALESCE(restart_lsn::text, ''),
+  COALESCE(confirmed_flush_lsn::text, ''),
+  COALESCE(wal_status::text, '')
+FROM pg_catalog.pg_replication_slots
+ORDER BY slot_name`},
+		{slotColsMinimal, `
+SELECT
+  slot_name,
+  COALESCE(plugin, ''),
+  COALESCE(slot_type, ''),
+  COALESCE(database, ''),
+  active,
+  COALESCE(active_pid, 0),
+  temporary,
+  COALESCE(restart_lsn::text, ''),
+  COALESCE(confirmed_flush_lsn::text, '')
+FROM pg_catalog.pg_replication_slots
+ORDER BY slot_name`},
+	}
+
+	var (
+		rows     *sql.Rows
+		err      error
+		colsUsed slotCols
+	)
+	for _, q := range queries {
+		rows, err = r.db().QueryContext(ctx, q.sql)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "42703" {
+				// undefined_column — try the next fallback
+				continue
+			}
+			return nil, err
+		}
+		colsUsed = q.cols
+		break
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -563,12 +625,27 @@ ORDER BY slot_name`)
 			slotName, pluginName, slotType, database string
 			active                                   bool
 			activePid                                int64
-			temporary, twoPhase                      bool
-			restartLsn, confirmedFlushLsn, walStatus string
+			temporary                                bool
+			restartLsn, confirmedFlushLsn            string
+			walStatus                                string
+			twoPhase                                 bool
 		)
-		if err := rows.Scan(&slotName, &pluginName, &slotType, &database, &active, &activePid,
-			&temporary, &restartLsn, &confirmedFlushLsn, &walStatus, &twoPhase); err != nil {
-			return nil, err
+		switch colsUsed {
+		case slotColsFull:
+			if err := rows.Scan(&slotName, &pluginName, &slotType, &database, &active, &activePid,
+				&temporary, &restartLsn, &confirmedFlushLsn, &walStatus, &twoPhase); err != nil {
+				return nil, err
+			}
+		case slotColsNoPhase:
+			if err := rows.Scan(&slotName, &pluginName, &slotType, &database, &active, &activePid,
+				&temporary, &restartLsn, &confirmedFlushLsn, &walStatus); err != nil {
+				return nil, err
+			}
+		default: // slotColsMinimal
+			if err := rows.Scan(&slotName, &pluginName, &slotType, &database, &active, &activePid,
+				&temporary, &restartLsn, &confirmedFlushLsn); err != nil {
+				return nil, err
+			}
 		}
 		res, err := CreateResource(r.MqlRuntime, "postgresql.replicationSlot", map[string]*llx.RawData{
 			"__id":              llx.StringData("postgresql.replicationSlot/" + slotName),
@@ -682,7 +759,7 @@ ORDER BY s.subname`)
 			"name":              llx.StringData(name),
 			"owner":             llx.StringData(owner),
 			"enabled":           llx.BoolData(enabled),
-			"connInfo":          llx.StringData(connInfo),
+			"connInfo":          llx.StringData(redactConnInfo(connInfo)),
 			"slotName":          llx.StringData(slotName),
 			"synchronousCommit": llx.StringData(synchronousCommit),
 			"publicationNames":  llx.ArrayData(stringsToAny(publicationNames), types.String),
@@ -831,6 +908,48 @@ func optionsListToMap(in []string) map[string]any {
 		} else {
 			out[kv[:eq]] = kv[eq+1:]
 		}
+	}
+	return out
+}
+
+// redactConnInfo removes the password value from a libpq connection string so
+// that plaintext credentials are not stored in scan results. Both the
+// single-quoted form (password='secret') and the bare-word form
+// (password=secret) are replaced with password=***.
+func redactConnInfo(connInfo string) string {
+	out := connInfo
+	// Single-quoted form: password='...'
+	for {
+		idx := strings.Index(out, "password='")
+		if idx < 0 {
+			break
+		}
+		start := idx + len("password='")
+		end := strings.Index(out[start:], "'")
+		if end < 0 {
+			// Unclosed quote — redact to end of string.
+			out = out[:idx] + "password=***"
+			break
+		}
+		out = out[:idx] + "password=***" + out[start+end+1:]
+	}
+	// Bare-word form: password=... (value ends at next space or end of string)
+	for {
+		idx := strings.Index(out, "password=")
+		if idx < 0 {
+			break
+		}
+		// Skip if already redacted.
+		if strings.HasPrefix(out[idx:], "password=***") {
+			break
+		}
+		start := idx + len("password=")
+		end := strings.IndexByte(out[start:], ' ')
+		if end < 0 {
+			out = out[:idx] + "password=***"
+			break
+		}
+		out = out[:idx] + "password=***" + out[start+end:]
 	}
 	return out
 }

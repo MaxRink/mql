@@ -212,15 +212,6 @@ func (s *mqlPostgresqlConf) params(file *mqlFile) (map[string]any, error) {
 // Convenience views into specific directives. They all derive from `params`
 // so they share the same parse cycle (single file read, single tokenisation).
 
-func paramString(params map[string]any, key string) string {
-	if v, ok := params[key]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
 func (s *mqlPostgresqlConf) listenAddresses(params map[string]any) ([]any, error) {
 	v := paramString(params, "listen_addresses")
 	if v == "" {
