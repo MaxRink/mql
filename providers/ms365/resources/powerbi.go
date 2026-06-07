@@ -37,7 +37,9 @@ var powerbiReport = `
 $ErrorActionPreference = "Stop"
 $pbiToken = '%s'
 
-Install-Module -Name MicrosoftPowerBIMgmt -Scope CurrentUser -Force
+if (-not (Get-Module -ListAvailable -Name MicrosoftPowerBIMgmt)) {
+  Install-Module -Name MicrosoftPowerBIMgmt -Scope CurrentUser -Force
+}
 Import-Module MicrosoftPowerBIMgmt
 
 Connect-PowerBIServiceAccount -Token $pbiToken | Out-Null
@@ -54,9 +56,25 @@ function Get-PbiSection([scriptblock]$call) {
   }
 }
 
+# Get-PbiWorkspaces pages the admin groups endpoint (max 5000 per page) so
+# tenants with more than 5000 workspaces are not silently truncated.
+function Get-PbiWorkspaces() {
+  $all = @()
+  $skip = 0
+  while ($true) {
+    $url = 'admin/groups?$top=5000&$expand=users&$skip=' + $skip
+    $page = @((Invoke-PowerBIRestMethod -Url $url -Method Get | ConvertFrom-Json).value)
+    if ($page.Count -eq 0) { break }
+    $all += $page
+    if ($page.Count -lt 5000) { break }
+    $skip += 5000
+  }
+  return $all
+}
+
 $report = [PSCustomObject]@{
   TenantSettings            = (Get-PbiSection { (Invoke-RestMethod -Uri 'https://api.fabric.microsoft.com/v1/admin/tenantsettings' -Headers $fabricHeaders -Method Get).tenantSettings })
-  Workspaces                = (Get-PbiSection { (Invoke-PowerBIRestMethod -Url 'admin/groups?$top=5000&$expand=users' -Method Get | ConvertFrom-Json).value })
+  Workspaces                = (Get-PbiSection { Get-PbiWorkspaces })
   Capacities                = (Get-PbiSection { (Invoke-PowerBIRestMethod -Url 'admin/capacities' -Method Get | ConvertFrom-Json).value })
   PublishedToWeb            = (Get-PbiSection { (Invoke-PowerBIRestMethod -Url 'admin/widelySharedArtifacts/publishedToWeb' -Method Get | ConvertFrom-Json).ArtifactAccessEntities })
   SharedToWholeOrganization = (Get-PbiSection { (Invoke-PowerBIRestMethod -Url 'admin/widelySharedArtifacts/linksSharedToWholeOrganization' -Method Get | ConvertFrom-Json).ArtifactAccessEntities })
@@ -197,7 +215,10 @@ func (r *mqlMicrosoftPowerbi) fetchReport() (*powerBiReportRaw, error) {
 		return nil, err
 	}
 
-	script := fmt.Sprintf(powerbiReport, pbiToken.Token)
+	// The token is interpolated into a single-quoted PowerShell string; double
+	// any single quote so a token value can never break out of the quoting.
+	escapedToken := strings.ReplaceAll(pbiToken.Token, "'", "''")
+	script := fmt.Sprintf(powerbiReport, escapedToken)
 	res, err := conn.CheckAndRunPowershellScript(script)
 	if err != nil {
 		return nil, err
