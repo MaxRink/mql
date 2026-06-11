@@ -78,6 +78,7 @@ depsdev
 dlp
 dlv
 dport
+entrypoint
 erlang
 evals
 faa
@@ -109,6 +110,7 @@ junos
 kqueue
 kts
 linuxbrew
+mapstructure
 maxcpu
 maxmem
 mcp
@@ -117,6 +119,7 @@ mildner
 mkey
 mno
 mongodb
+mqlx
 mtls
 myapp
 myproject
@@ -147,6 +150,7 @@ paginators
 panos
 phpunit
 podfile
+prism
 privsep
 proxmox
 psr
@@ -156,6 +160,7 @@ qlist
 querypack
 quorate
 readlines
+recompilation
 rstrip
 rtl
 rtsp
@@ -163,6 +168,7 @@ seabios
 serde
 slo
 sph
+sqlx
 sshleifer
 startswith
 stdlib
@@ -172,6 +178,7 @@ swi
 symfony
 tailscale
 temurin
+tetragon
 tokenid
 tokio
 transitives
