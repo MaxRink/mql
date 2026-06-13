@@ -100,7 +100,7 @@ func (g *mqlGcpProjectSecretmanagerService) secrets() ([]any, error) {
 
 	ctx := context.Background()
 
-	client, err := secretmanager.NewClient(ctx, option.WithCredentials(creds))
+	client, err := secretmanager.NewClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +261,7 @@ func (g *mqlGcpProjectSecretmanagerServiceSecret) versions() ([]any, error) {
 
 	ctx := context.Background()
 
-	client, err := secretmanager.NewClient(ctx, option.WithCredentials(creds))
+	client, err := secretmanager.NewClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +390,7 @@ func (g *mqlGcpProjectSecretmanagerServiceSecret) iamPolicy() ([]any, error) {
 
 	ctx := context.Background()
 
-	client, err := secretmanager.NewClient(ctx, option.WithCredentials(creds))
+	client, err := secretmanager.NewClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}

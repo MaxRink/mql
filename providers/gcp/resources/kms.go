@@ -163,7 +163,7 @@ func initGcpProjectKmsServiceKeyringCryptokey(runtime *plugin.Runtime, args map[
 	}
 
 	ctx := context.Background()
-	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds))
+	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -284,7 +284,7 @@ func (g *mqlGcpProjectKmsService) locations() ([]any, error) {
 
 	ctx := context.Background()
 
-	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds))
+	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +330,7 @@ func (g *mqlGcpProjectKmsService) keyrings() ([]any, error) {
 
 	ctx := context.Background()
 
-	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds))
+	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +393,7 @@ func (g *mqlGcpProjectKmsServiceKeyring) cryptokeys() ([]any, error) {
 
 	ctx := context.Background()
 
-	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds))
+	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -498,7 +498,7 @@ func (g *mqlGcpProjectKmsServiceKeyringCryptokey) versions() ([]any, error) {
 
 	ctx := context.Background()
 
-	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds))
+	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +556,7 @@ func (g *mqlGcpProjectKmsServiceKeyringCryptokey) iamPolicy() ([]any, error) {
 
 	ctx := context.Background()
 
-	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds))
+	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -617,7 +617,7 @@ func (g *mqlGcpProjectKmsServiceKeyring) iamPolicy() ([]any, error) {
 
 	ctx := context.Background()
 
-	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds))
+	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -718,7 +718,7 @@ func (g *mqlGcpProjectKmsService) retiredResources() ([]any, error) {
 	}
 
 	ctx := context.Background()
-	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds))
+	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -784,7 +784,7 @@ func (g *mqlGcpProjectKmsService) ekmConnections() ([]any, error) {
 	}
 
 	ctx := context.Background()
-	ekmSvc, err := kms.NewEkmClient(ctx, option.WithCredentials(creds))
+	ekmSvc, err := kms.NewEkmClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -866,7 +866,7 @@ func (g *mqlGcpProjectKmsServiceKeyring) importJobs() ([]any, error) {
 	}
 
 	ctx := context.Background()
-	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds))
+	kmsSvc, err := kms.NewKeyManagementClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}

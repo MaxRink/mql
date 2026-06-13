@@ -96,7 +96,7 @@ func (g *mqlGcpProjectAssetService) resources() ([]any, error) {
 	}
 
 	ctx := context.Background()
-	client, err := asset.NewClient(ctx, option.WithCredentials(creds))
+	client, err := asset.NewClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func (g *mqlGcpProjectAssetService) iamPolicies() ([]any, error) {
 	}
 
 	ctx := context.Background()
-	client, err := asset.NewClient(ctx, option.WithCredentials(creds))
+	client, err := asset.NewClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}

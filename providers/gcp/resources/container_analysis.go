@@ -100,7 +100,7 @@ func (g *mqlGcpProjectContainerAnalysisService) notes() ([]any, error) {
 	}
 
 	ctx := context.Background()
-	client, err := containeranalysis.NewClient(ctx, option.WithCredentials(creds))
+	client, err := containeranalysis.NewClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func (g *mqlGcpProjectContainerAnalysisService) occurrences() ([]any, error) {
 	}
 
 	ctx := context.Background()
-	client, err := containeranalysis.NewClient(ctx, option.WithCredentials(creds))
+	client, err := containeranalysis.NewClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
 	if err != nil {
 		return nil, err
 	}
