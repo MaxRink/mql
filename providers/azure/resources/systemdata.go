@@ -95,7 +95,11 @@ func (a *mqlAzureSubscriptionStorageServiceAccount) systemMetadata() (*mqlAzureS
 }
 
 func (a *mqlAzureSubscriptionKeyVaultServiceVault) systemMetadata() (*mqlAzureSubscriptionSystemData, error) {
-	return systemMetadataFromRaw(a.MqlRuntime, a.Id.Data, a.systemDataRaw(), &a.SystemMetadata)
+	raw, err := a.systemDataRaw()
+	if err != nil {
+		return nil, err
+	}
+	return systemMetadataFromRaw(a.MqlRuntime, a.Id.Data, raw, &a.SystemMetadata)
 }
 
 func (a *mqlAzureSubscriptionAksServiceCluster) systemMetadata() (*mqlAzureSubscriptionSystemData, error) {
