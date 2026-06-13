@@ -140,7 +140,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) getSimpleDefenderPricing(azur
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +195,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) forServers() (*mqlAzureSubscr
 	ctx := context.Background()
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +393,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) defenderForApis() (*mqlAzureS
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +423,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) defenderCSPM() (*mqlAzureSubs
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -530,7 +538,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) forContainers() (*mqlAzureSub
 	}
 
 	// Check if Defender for Containers is enabled by querying the pricing tier
-	clientFactory, err := armsecurity.NewClientFactory(subId, armConn.token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, armConn.token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +587,9 @@ func (a *mqlAzureSubscriptionCloudDefenderServiceDefenderForContainers) fetchRaw
 	a.rawExtensionsOnce.Do(func() {
 		conn := a.MqlRuntime.Connection.(*connection.AzureConnection)
 		subId := a.SubscriptionId.Data
-		clientFactory, err := armsecurity.NewClientFactory(subId, conn.Token(), nil)
+		clientFactory, err := armsecurity.NewClientFactory(subId, conn.Token(), &arm.ClientOptions{
+			ClientOptions: conn.ClientOptions(),
+		})
 		if err != nil {
 			a.rawExtensionsErr = err
 			return
@@ -614,7 +626,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) getSecuritySettingsFor(name s
 	ctx := context.Background()
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -692,7 +706,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) securityContacts() ([]any, er
 	ctx := context.Background()
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -832,7 +848,9 @@ func (a *mqlAzureSubscriptionCloudDefenderServiceDefenderCSPM) extensions() ([]a
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -935,7 +953,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) secureScores() ([]any, error)
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1006,7 +1026,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) secureScoreControls() ([]any,
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1097,7 +1119,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) regulatoryComplianceStandards
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1177,7 +1201,9 @@ func (a *mqlAzureSubscriptionCloudDefenderServiceRegulatoryComplianceStandard) c
 
 	standardName := a.Name.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1374,7 +1400,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) assessments() ([]any, error) 
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1490,7 +1518,9 @@ func (a *mqlAzureSubscriptionCloudDefenderService) alerts() ([]any, error) {
 	token := conn.Token()
 	subId := a.SubscriptionId.Data
 
-	clientFactory, err := armsecurity.NewClientFactory(subId, token, nil)
+	clientFactory, err := armsecurity.NewClientFactory(subId, token, &arm.ClientOptions{
+		ClientOptions: conn.ClientOptions(),
+	})
 	if err != nil {
 		return nil, err
 	}
