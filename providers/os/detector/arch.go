@@ -33,21 +33,7 @@ func archFromELF(fs afero.Fs) string {
 	}
 
 	for _, path := range archBinaryCandidates {
-		f, err := fs.Open(path)
-		if err != nil {
-			continue
-		}
-
-		ef, err := elf.NewFile(f)
-		if err != nil {
-			f.Close()
-			continue
-		}
-
-		arch := elfMachineToArch(ef.Machine, ef.Data)
-		ef.Close()
-		f.Close()
-
+		arch := archFromBinary(fs, path)
 		if arch != "" {
 			log.Debug().Str("path", path).Str("arch", arch).Msg("detected platform architecture from ELF header")
 			return arch
@@ -56,6 +42,24 @@ func archFromELF(fs afero.Fs) string {
 
 	log.Debug().Msg("could not determine platform architecture from filesystem")
 	return ""
+}
+
+// archFromBinary opens a single file and returns its ELF machine architecture,
+// or an empty string if the file does not exist or is not a recognized ELF
+// binary.
+func archFromBinary(fs afero.Fs, path string) string {
+	f, err := fs.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	ef, err := elf.NewFile(f)
+	if err != nil {
+		return ""
+	}
+
+	return elfMachineToArch(ef.Machine, ef.Data)
 }
 
 // elfMachineToArch maps an ELF machine type to the uname-style architecture
