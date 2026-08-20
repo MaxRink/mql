@@ -120,10 +120,9 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
-require (
+	require (
 	github.com/containerd/containerd v1.7.34
 	github.com/containerd/containerd/api v1.10.0
-	github.com/containerd/platforms v1.0.0-rc.2
 	github.com/moby/moby/api v1.56.0
 	github.com/moby/moby/client v0.6.0
 	github.com/tailscale/hujson v0.0.0-20260727124030-b80ff77dac4f
