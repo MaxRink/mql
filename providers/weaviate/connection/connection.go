@@ -4,6 +4,7 @@
 package connection
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"net"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/weaviate/weaviate-go-client/v5/weaviate"
 	"github.com/weaviate/weaviate-go-client/v5/weaviate/auth"
+	"github.com/weaviate/weaviate-go-client/v5/weaviate/rbac"
 	"go.mondoo.com/mql/providers-sdk/v1/inventory"
 	"go.mondoo.com/mql/providers-sdk/v1/plugin"
 	"go.mondoo.com/mql/providers-sdk/v1/vault"
@@ -42,6 +44,11 @@ type WeaviateConnection struct {
 	clientOnce sync.Once
 	client     *weaviate.Client
 	clientErr  error
+
+	rolesOnce   sync.Once
+	roles       []rbac.Role
+	rolesByName map[string]*rbac.Role
+	rolesErr    error
 }
 
 func NewWeaviateConnection(id uint32, asset *inventory.Asset, conf *inventory.Config) (*WeaviateConnection, error) {
@@ -155,6 +162,57 @@ func (c *WeaviateConnection) AnonymousAccessEnabled() bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
+}
+
+// Roles returns every role defined on the server, with its permissions, read
+// once per connection and shared by every caller. Three of them need the same
+// answer: the instance's role list, the probe that decides whether role-based
+// access control is enabled, and the lookup that turns a role named by a user
+// into that role's permissions. The error is remembered too, so a credential
+// that cannot read roles costs one request rather than one per caller.
+//
+// The request deliberately runs on a background context rather than one passed
+// in by a caller. Because the result is shared, whichever caller happened to
+// arrive first would otherwise decide the deadline and cancellation for every
+// later caller, which is a hard failure to attribute once any caller starts
+// passing a context that can be cancelled.
+func (c *WeaviateConnection) Roles() ([]rbac.Role, error) {
+	c.loadRoles()
+	return c.roles, c.rolesErr
+}
+
+// RoleByName returns the server's definition of one role. Resolving a role that
+// something else named by name alone happens once per user-to-role edge, so the
+// lookup is an index built alongside the list rather than a scan of it.
+//
+// Only the server's own role list feeds this map, and nothing writes to it
+// afterwards, so a name-only role reference can never displace a populated role
+// here.
+func (c *WeaviateConnection) RoleByName(name string) (*rbac.Role, bool) {
+	c.loadRoles()
+	if c.rolesErr != nil {
+		return nil, false
+	}
+	role, ok := c.rolesByName[name]
+	return role, ok
+}
+
+func (c *WeaviateConnection) loadRoles() {
+	c.rolesOnce.Do(func() {
+		client, err := c.Client()
+		if err != nil {
+			c.rolesErr = err
+			return
+		}
+		c.roles, c.rolesErr = client.Roles().AllGetter().Do(context.Background())
+		if c.rolesErr != nil {
+			return
+		}
+		c.rolesByName = make(map[string]*rbac.Role, len(c.roles))
+		for i := range c.roles {
+			c.rolesByName[c.roles[i].Name] = &c.roles[i]
+		}
+	})
 }
 
 // Client returns the shared Weaviate client, dialing on first use.
