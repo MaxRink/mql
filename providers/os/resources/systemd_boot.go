@@ -14,9 +14,13 @@ import (
 	"sync"
 	"unicode/utf16"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
+	"go.mondoo.com/mql/llx"
 	"go.mondoo.com/mql/providers-sdk/v1/plugin"
+	"go.mondoo.com/mql/providers-sdk/v1/util/convert"
 	"go.mondoo.com/mql/providers/os/connection/shared"
+	"go.mondoo.com/mql/types"
 )
 
 // Length of the attribute header every EFI variable file begins with.
@@ -180,6 +184,140 @@ const efiLoaderVariable = "4a67b082-0a4c-41cf-b6c7-440b29bb8c4f"
 // in the marker inside its binary.
 const systemdBootLoaderName = "systemd-boot"
 
+// bootPartitions is what the EFI system partition states about the boot loader
+// installed on it, all of it read from files.
+type bootPartitions struct {
+	Esp       string
+	Boot      string
+	Version   string
+	Installed bool
+}
+
+// readBootPartitions reads what the partitions state. Every field degrades to an
+// empty value, so there is nothing here that fails: a partition that cannot be
+// read is a host with no boot loader installed on it, which is an answer rather
+// than an error.
+func readBootPartitions(fs afero.Fs) bootPartitions {
+	esp := findEsp(fs)
+	return bootPartitions{
+		Esp:       esp,
+		Boot:      findBootPath(fs, esp),
+		Installed: systemdBootInstalled(fs, esp),
+		Version:   readSystemdBootVersion(fs, esp),
+	}
+}
+
+// Directories under $BOOT that systemd-boot takes entries from: the Boot
+// Loader Specification entry files, and the unified kernel images, which
+// declare themselves by being there and carry their command line inside.
+const (
+	bootEntriesDir   = "loader/entries"
+	unifiedKernelDir = "EFI/Linux"
+)
+
+// readBootEntries returns every entry systemd-boot offers on the next boot,
+// from both sources it takes them from. A source that cannot be read yields
+// nothing rather than an error: a host keeps its entries in one of these
+// places, not both, so an absent directory is the normal case.
+func readBootEntries(fs afero.Fs, bootPath string) []BootEntry {
+	if bootPath == "" {
+		return nil
+	}
+
+	// The variables a GRUB entry may reference do not exist here: systemd-boot
+	// expands nothing, so an entry states its own command line.
+	entries, _ := readBLSEntries(fs, path.Join(bootPath, bootEntriesDir), nil)
+
+	return append(entries, readUnifiedKernelEntries(fs, path.Join(bootPath, unifiedKernelDir))...)
+}
+
+// readUnifiedKernelEntries reads the unified kernel images in dir. Only the
+// headers and two small sections of each image are read; the kernel inside it
+// is the bulk of the file and is never touched.
+func readUnifiedKernelEntries(fs afero.Fs, dir string) []BootEntry {
+	matches, err := afero.Glob(fs, path.Join(dir, "*.efi"))
+	if err != nil {
+		return nil
+	}
+	sort.Strings(matches)
+
+	entries := []BootEntry{}
+	for _, p := range matches {
+		r, closer, err := secbootImageReader(fs, p)
+		if err != nil {
+			log.Debug().Str("path", p).Err(err).Msg("cannot open unified kernel image")
+			continue
+		}
+		img, err := ReadUnifiedKernelImage(r)
+		closer()
+		if err != nil {
+			// A file with an .efi suffix that is not a unified kernel image is
+			// not an error: it is simply not one of the entries.
+			log.Debug().Str("path", p).Err(err).Msg("not a readable unified kernel image")
+			continue
+		}
+		if img.Cmdline == "" {
+			// An EFI binary carrying no command line boots no kernel of ours,
+			// such as the boot loader itself or a firmware updater beside it.
+			continue
+		}
+
+		entry := BootEntry{
+			Title:              path.Base(p),
+			Kernel:             img.Kernel,
+			Cmdline:            img.Cmdline,
+			Parameters:         img.Parameters,
+			Flags:              img.Flags,
+			Source:             p,
+			UnifiedKernelImage: true,
+			Signed:             img.Signed,
+		}
+		entry.Kind = classifyEntry(&entry)
+		entry.Bootable = entryBootable(entry.Kind)
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+// loaderVariables is what the boot loader recorded about the boot it performed,
+// read from the EFI variables it sets as it hands control to the kernel.
+type loaderVariables struct {
+	Name     string
+	Version  string
+	Selected string
+
+	// Readable records whether the variables could be read at all, which is
+	// what separates "another loader booted this host" from "nothing observed
+	// the boot".
+	Readable bool
+}
+
+// readLoaderVariables reads the boot loader interface variables. A host with no
+// EFI variables at all is not a failure: an image and a legacy BIOS host both
+// have none, and neither booted through a loader that could have written them.
+// A variable that exists and cannot be read is an error, because that leaves
+// the question open rather than answering it.
+func readLoaderVariables(conn shared.Connection, fs afero.Fs) (loaderVariables, error) {
+	vars := loaderVariables{}
+
+	if _, err := fs.Stat(efiVarsDir); err != nil {
+		return vars, nil
+	}
+	vars.Readable = true
+
+	info, err := readEfiVarString(conn, fs, "LoaderInfo-"+efiLoaderVariable)
+	if err != nil {
+		return vars, err
+	}
+	vars.Name, vars.Version = parseLoaderInfo(info)
+
+	vars.Selected, err = readEfiVarString(conn, fs, "LoaderEntrySelected-"+efiLoaderVariable)
+	if err != nil {
+		return vars, err
+	}
+	return vars, nil
+}
+
 type mqlSystemdBootInternal struct {
 	once              sync.Once
 	cachedEsp         string
@@ -189,7 +327,17 @@ type mqlSystemdBootInternal struct {
 	cachedActive      bool
 	cachedSelected    string
 	cachedEfiVarsRead bool
-	fetchErr          error
+	cachedEntries     []BootEntry
+	cachedEntriesOK   bool
+
+	// The two sources fail independently, so their failures are kept apart.
+	// fetchErr is a failure to reach the host, which leaves nothing to report.
+	// efiVarErr is a failure to read the boot loader variables, which leaves
+	// only the fields that depend on them unanswered: the partitions were
+	// already read by then, and reporting an error for those would discard a
+	// measurement that succeeded.
+	fetchErr  error
+	efiVarErr error
 }
 
 func (s *mqlSystemdBoot) id() (string, error) {
@@ -211,34 +359,29 @@ func (s *mqlSystemdBoot) fetch() error {
 			return
 		}
 
-		s.cachedEsp = findEsp(fs)
-		s.cachedBootPath = findBootPath(fs, s.cachedEsp)
-		s.cachedInstalled = systemdBootInstalled(fs, s.cachedEsp)
-		s.cachedVersion = readSystemdBootVersion(fs, s.cachedEsp)
+		parts := readBootPartitions(fs)
+		s.cachedEsp = parts.Esp
+		s.cachedBootPath = parts.Boot
+		s.cachedInstalled = parts.Installed
+		s.cachedVersion = parts.Version
 
-		if _, err := fs.Stat(efiVarsDir); err != nil {
-			// No EFI variables: a legacy BIOS host, or a scan of an image or a
-			// mounted filesystem, where nothing booted at all. What the loader
-			// would report about a boot cannot be answered either way.
-			return
-		}
-		s.cachedEfiVarsRead = true
+		s.cachedEntries = readBootEntries(fs, parts.Boot)
+		s.cachedEntriesOK = len(s.cachedEntries) > 0
 
-		info, err := readEfiVarString(conn, fs, "LoaderInfo-"+efiLoaderVariable)
+		vars, err := readLoaderVariables(conn, fs)
 		if err != nil {
-			s.fetchErr = err
+			s.efiVarErr = err
 			return
 		}
-		name, version := parseLoaderInfo(info)
-		s.cachedActive = name == systemdBootLoaderName
-		if s.cachedActive && version != "" {
+		s.cachedEfiVarsRead = vars.Readable
+		s.cachedActive = vars.Name == systemdBootLoaderName
+		s.cachedSelected = vars.Selected
+		if s.cachedActive && vars.Version != "" {
 			// The loader that ran states its own version, which is what booted
 			// this host even where a different binary now sits on the
 			// partition.
-			s.cachedVersion = version
+			s.cachedVersion = vars.Version
 		}
-
-		s.cachedSelected, s.fetchErr = readEfiVarString(conn, fs, "LoaderEntrySelected-"+efiLoaderVariable)
 	})
 	return s.fetchErr
 }
@@ -246,6 +389,9 @@ func (s *mqlSystemdBoot) fetch() error {
 func (s *mqlSystemdBoot) active() (bool, error) {
 	if err := s.fetch(); err != nil {
 		return false, err
+	}
+	if s.efiVarErr != nil {
+		return false, s.efiVarErr
 	}
 	if !s.cachedEfiVarsRead {
 		// Nothing observed this host boot. Reporting false would say
@@ -289,9 +435,54 @@ func (s *mqlSystemdBoot) selectedEntry() (string, error) {
 	if err := s.fetch(); err != nil {
 		return "", err
 	}
+	if s.efiVarErr != nil {
+		return "", s.efiVarErr
+	}
 	if !s.cachedEfiVarsRead {
 		s.SelectedEntry.State = plugin.StateIsSet | plugin.StateIsNull
 		return "", nil
 	}
 	return s.cachedSelected, nil
+}
+
+func (s *mqlSystemdBoot) entries() ([]any, error) {
+	if err := s.fetch(); err != nil {
+		return nil, err
+	}
+
+	if !s.cachedEntriesOK {
+		// A host whose boot entries cannot be read has none to report. An
+		// empty list would read as "systemd-boot offers nothing to boot", and
+		// would satisfy every assertion made over the entries.
+		s.Entries.State = plugin.StateIsSet | plugin.StateIsNull
+		return nil, nil
+	}
+
+	resources := make([]any, 0, len(s.cachedEntries))
+	for _, entry := range s.cachedEntries {
+		resource, err := CreateResource(s.MqlRuntime, "systemd.boot.entry", map[string]*llx.RawData{
+			"__id":               llx.StringData("systemd.boot.entry:" + entry.Source),
+			"title":              llx.StringData(entry.Title),
+			"kind":               llx.StringData(entry.Kind),
+			"bootable":           llx.BoolData(entry.Bootable),
+			"kernel":             llx.StringData(entry.Kernel),
+			"cmdline":            llx.StringData(entry.Cmdline),
+			"parameters":         llx.MapData(convert.MapToInterfaceMap(entry.Parameters), types.String),
+			"flags":              llx.ArrayData(convert.SliceAnyToInterface(entry.Flags), types.String),
+			"unifiedKernelImage": llx.BoolData(entry.UnifiedKernelImage),
+			"signed":             llx.BoolData(entry.Signed),
+			"source":             llx.StringData(entry.Source),
+			"initrd":             llx.StringData(entry.Initrd),
+		})
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resource)
+	}
+
+	return resources, nil
+}
+
+func (e *mqlSystemdBootEntry) id() (string, error) {
+	return e.MqlID(), nil
 }
