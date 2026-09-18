@@ -22,6 +22,8 @@ import (
 	"go.mondoo.com/mql/cli/components"
 	"go.mondoo.com/mql/cli/config"
 	cli_errors "go.mondoo.com/mql/cli/errors"
+	cliproviders "go.mondoo.com/mql/cli/providers"
+	"go.mondoo.com/mql/cli/selfupdate"
 	"go.mondoo.com/mql/providers"
 	"go.mondoo.com/mql/providers-sdk/v1/inventory"
 	"go.mondoo.com/mql/providers-sdk/v1/sysinfo"
@@ -211,12 +213,15 @@ func checkStatus(ctx context.Context) (Status, error) {
 	if opts.UpdatesURL != "" {
 		s.Client.UpdatesURL = opts.UpdatesURL
 	} else {
-		s.Client.UpdatesURL = providers.DefaultUpdatesURL
+		s.Client.UpdatesURL = selfupdate.DefaultUpdatesURL
 	}
 
-	// Fetch latest version using the configured updates URL
-	releaseURL := s.Client.UpdatesURL + "/mql/latest.json?ignoreCache=1"
-	latestVersion, err := mql.GetLatestReleaseNameContext(ctx, releaseURL, httpClient)
+	// Read the same manifests the self-update reads, in the same order, so status
+	// cannot report a version the updater would not install -- including when
+	// updates_url names a mirror laid out as the release bucket rather than as
+	// the install service.
+	latestVersion, err := selfupdate.LatestVersion(ctx,
+		selfupdate.ReleaseURLs(opts.UpdatesURL, "mql", config.GetUpdateChannel()))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get latest version")
 	}
@@ -260,12 +265,12 @@ func checkStatus(ctx context.Context) (Status, error) {
 	// whether a machine is on pre-releases.
 	s.Client.UpdateChannel = config.GetUpdateChannel()
 
-	// Determine the providers URL:
-	// 1. If updates_url is set, use updates_url + "/providers"
-	// 2. Otherwise, use the default
-	if opts.UpdatesURL != "" {
-		s.Client.ProvidersURL = opts.UpdatesURL + "/providers"
-	} else {
+	// Report the registry that is actually in effect, resolved by the same code
+	// that sets it. Recomputing the precedence here is how this row came to claim
+	// Mondoo's bucket while providers were being downloaded from a configured
+	// mirror.
+	s.Client.ProvidersURL = cliproviders.RegistryURL()
+	if s.Client.ProvidersURL == "" {
 		s.Client.ProvidersURL = providers.DefaultProviderRegistryURL
 	}
 

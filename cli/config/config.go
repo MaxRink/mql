@@ -207,7 +207,10 @@ func GetAutoUpdate() bool {
 	return true
 }
 
-// GetUpdatesURL returns the updates_url setting from viper config.
+// GetUpdatesURL returns the updates_url setting from viper config, or an empty
+// string when it is unset -- which is what selects the default install service
+// rather than any value named here. See the UpdatesURL field for the layout a
+// host has to serve.
 // Returns empty string if not set (caller should use default).
 func GetUpdatesURL() string {
 	return viper.GetString("updates_url")
@@ -430,10 +433,22 @@ type CommonOpts struct {
 	// annotations that will be applied to all assets
 	Annotations map[string]string `json:"annotations,omitempty" mapstructure:"annotations"`
 
-	// UpdatesURL is the base URL where updates are fetched from
-	// if not set, the default Mondoo releases URL is used (https://releases.mondoo.com)
-	// This can be a custom URL for an internal release registry
-	// Providers are fetched from UpdatesURL + "/providers"
+	// UpdatesURL is the base URL updates are fetched from, for an internal
+	// release registry or a mirror. Leave it unset to use Mondoo's.
+	//
+	// It is read by two consumers, and a host it is pointed at has to serve both:
+	//
+	//	binary updates   UpdatesURL + "/package/<binary>/latest.json", with the
+	//	                 release channel as a "?channel=" query parameter
+	//	providers        UpdatesURL + "/providers"
+	//
+	// That is the install service's layout, and it is the one to point this at.
+	// A mirror of the release bucket also works: it spells the manifest
+	// "/<binary>/latest.json" and a channel as a sibling document, and the client
+	// falls back to reading that (see selfupdate.ReleaseURLs). The fallback is
+	// there so an existing mirror keeps working, not as a second layout to
+	// publish -- it costs a failed request per check and cannot express a channel
+	// without another document, so it is the one that will be removed.
 	UpdatesURL string `json:"updates_url,omitempty" mapstructure:"updates_url"`
 
 	// ProviderPortRange is the loopback TCP port range ("min-max") that provider
