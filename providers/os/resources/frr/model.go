@@ -359,6 +359,7 @@ func (s *neighborSet) list() []Neighbor {
 	out := make([]Neighbor, 0, len(s.order))
 	for _, name := range s.order {
 		n := s.byName[name]
+		n.rollup()
 		sort.Strings(n.ActivatedAddressFamilies)
 		out = append(out, *n)
 	}
@@ -579,7 +580,6 @@ func applyNeighborAddressFamilyLine(set *neighborSet, afi, safi string, d *Direc
 	}
 
 	n.Params[strings.Join(rest, " ")] = boolParam(!d.Negated)
-	n.rollup()
 }
 
 // addressFamily returns the per-family settings of a neighbor, creating them
