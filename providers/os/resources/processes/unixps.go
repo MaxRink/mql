@@ -357,11 +357,93 @@ func (upm *UnixProcessManager) runList() ([]*OSProcess, error) {
 
 	log.Debug().Int("processes", len(entries)).Msg("found processes")
 
+	isFreeBSD := upm.platform.Name == "freebsd"
+	var comms map[int64]string
+	if isFreeBSD {
+		comms = upm.freebsdComms()
+	}
 	var ps []*OSProcess
 	for i := range entries {
-		ps = append(ps, entries[i].ToOSProcess())
+		p := entries[i].ToOSProcess()
+		if isFreeBSD {
+			p.State = freebsdProcessState(entries[i].Stat)
+			if comm, ok := comms[p.Pid]; ok {
+				p.Executable = comm
+			}
+		}
+		ps = append(ps, p)
 	}
 	return ps, nil
+}
+
+// freebsdComms returns the name of the binary each process exec'd, keyed by
+// pid, from ps's comm column. FreeBSD daemons rewrite their process title with
+// setproctitle(3) ("nginx: master process ...", "sshd: /usr/sbin/sshd
+// [listener] ...", "(postgres)"), so the first word of the command column does
+// not name the binary. comm is the exec'd file name (up to MAXCOMLEN
+// characters), the counterpart of the Name line in Linux's /proc/<pid>/status.
+// It runs as a separate ps call because a comm can contain spaces (kernel
+// threads such as "sequencer 00"), which only parses as the last column. A
+// failure leaves the map empty, and every process keeps the executable taken
+// from its command.
+func (upm *UnixProcessManager) freebsdComms() map[int64]string {
+	stdout, err := upm.runPs("ps ax -o pid= -o comm=")
+	if err != nil {
+		log.Debug().Err(err).Msg("processes> could not read process names, using the command")
+		return nil
+	}
+	return ParseFreeBSDComms(stdout)
+}
+
+// ParseFreeBSDComms parses the output of `ps ax -o pid= -o comm=`: a pid, then
+// the rest of the line as the name.
+func ParseFreeBSDComms(input io.Reader) map[int64]string {
+	res := map[int64]string{}
+	scanner := bufio.NewScanner(input)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		pidStr, comm, ok := strings.Cut(line, " ")
+		if !ok {
+			continue
+		}
+		pid, err := strconv.ParseInt(pidStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		if comm = strings.TrimSpace(comm); comm != "" {
+			res[pid] = comm
+		}
+	}
+	return res
+}
+
+// freebsdRunStates names the run state that leads a FreeBSD ps STAT column,
+// as documented in ps(1). The labels follow the Linux /proc/<pid>/status
+// wording where the meaning is the same (R, S, D, T, Z, I).
+var freebsdRunStates = map[byte]string{
+	'D': "disk sleep",       // disk or other short-term uninterruptible wait
+	'I': "idle",             // sleeping for longer than about 20 seconds
+	'L': "lock wait",        // waiting to acquire a lock
+	'R': "running",          // runnable
+	'S': "sleeping",         // sleeping for less than about 20 seconds
+	'T': "stopped",          // stopped
+	'W': "interrupt thread", // idle interrupt thread
+	'Z': "zombie",           // dead, not yet reaped
+}
+
+// freebsdProcessState turns a FreeBSD ps STAT value such as "SLs" or "RNL"
+// into the "<letter> (<name>)" form Linux reports, for example "S (sleeping)".
+// Only the first character is the run state; the rest are modifiers (session
+// leader, locked pages, niceness) that Linux does not report either. An
+// undocumented letter is kept as is, and an empty value stays empty.
+func freebsdProcessState(stat string) string {
+	if stat == "" {
+		return ""
+	}
+	if name, ok := freebsdRunStates[stat[0]]; ok {
+		return stat[:1] + " (" + name + ")"
+	}
+	return stat[:1]
 }
 
 // ListSocketInodesByProcess returns a map with a pid as key and a list of socket inodes as value
