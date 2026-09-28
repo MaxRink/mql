@@ -15458,6 +15458,9 @@ var getDataFields = map[string]func(r plugin.Resource) *plugin.DataRes{
 	"idp.entra.tenantId": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlIdpEntra).GetTenantId()).ToDataRes(types.String)
 	},
+	"idp.entra.joinType": func(r plugin.Resource) *plugin.DataRes {
+		return (r.(*mqlIdpEntra).GetJoinType()).ToDataRes(types.String)
+	},
 	"cloud.provider": func(r plugin.Resource) *plugin.DataRes {
 		return (r.(*mqlCloud).GetProvider()).ToDataRes(types.String)
 	},
@@ -36359,6 +36362,10 @@ var setDataFields = map[string]func(r plugin.Resource, v *llx.RawData) bool{
 	},
 	"idp.entra.tenantId": func(r plugin.Resource, v *llx.RawData) (ok bool) {
 		r.(*mqlIdpEntra).TenantId, ok = plugin.RawToTValue[string](v.Value, v.Error)
+		return
+	},
+	"idp.entra.joinType": func(r plugin.Resource, v *llx.RawData) (ok bool) {
+		r.(*mqlIdpEntra).JoinType, ok = plugin.RawToTValue[string](v.Value, v.Error)
 		return
 	},
 	"cloud.__id": func(r plugin.Resource, v *llx.RawData) (ok bool) {
@@ -93361,6 +93368,7 @@ type mqlIdpEntra struct {
 	// optional: if you define mqlIdpEntraInternal it will be used here
 	DeviceId plugin.TValue[string]
 	TenantId plugin.TValue[string]
+	JoinType plugin.TValue[string]
 }
 
 // createIdpEntra creates a new instance of this resource
@@ -93401,6 +93409,10 @@ func (c *mqlIdpEntra) GetDeviceId() *plugin.TValue[string] {
 
 func (c *mqlIdpEntra) GetTenantId() *plugin.TValue[string] {
 	return &c.TenantId
+}
+
+func (c *mqlIdpEntra) GetJoinType() *plugin.TValue[string] {
+	return &c.JoinType
 }
 
 // mqlCloud for the cloud resource
