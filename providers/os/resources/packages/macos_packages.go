@@ -112,8 +112,10 @@ func parseSysProfilerApplications(input io.Reader) ([]sysProfilerItem, error) {
 // into packages, adding the bundles it did not report from the cryptexes and
 // the application folders.
 func macOSApplicationPackages(conn shared.Connection, platform *inventory.Platform, items []sysProfilerItem) []Package {
+	reported := len(items)
 	items = append(items, cryptexApplications(conn, items)...)
 	items = append(items, folderApplications(conn, items)...)
+	logUnreportedApplications(items[:reported], items[reported:])
 
 	pkgs := make([]Package, 0, len(items))
 	for i := range items {
@@ -251,6 +253,54 @@ func macOSApplicationPackages(conn shared.Connection, platform *inventory.Platfo
 	}
 
 	return pkgs
+}
+
+// logUnreportedApplications says how many application bundles were found in
+// the application folders that system_profiler did not report, so a partial
+// report is visible. See unreportedApplications.
+func logUnreportedApplications(reported, added []sysProfilerItem) {
+	count, systemMissing := unreportedApplications(reported, added)
+	if count == 0 {
+		return
+	}
+	ev := log.Debug().Int("reported", len(reported)).Int("added", count)
+	if systemMissing {
+		ev.Msg("system_profiler reported no applications under /System, Spotlight indexing may be off; added the applications found on disk")
+		return
+	}
+	ev.Msg("added applications found on disk that system_profiler did not report")
+}
+
+// unreportedApplications counts the added bundles system_profiler could have
+// reported, and says whether its report looks partial.
+//
+// With Spotlight indexing off, system_profiler still exits cleanly and prints
+// a well-formed report, but only of the applications outside /System: every
+// application macOS ships is missing from it. Those come from the folder
+// listing instead, and nothing else would show that the report was partial.
+//
+// Cryptex bundles are not counted. system_profiler never reports them, so
+// they are added on every scan and say nothing about the report.
+func unreportedApplications(reported, added []sysProfilerItem) (count int, systemMissing bool) {
+	addedSystem := 0
+	for _, entry := range added {
+		if strings.HasPrefix(entry.Path, cryptexRoot+"/") {
+			continue
+		}
+		count++
+		if strings.HasPrefix(entry.Path, "/System/") {
+			addedSystem++
+		}
+	}
+	if len(reported) == 0 || addedSystem == 0 {
+		return count, false
+	}
+	for _, entry := range reported {
+		if strings.HasPrefix(entry.Path, "/System/") {
+			return count, false
+		}
+	}
+	return count, true
 }
 
 // MacOS
