@@ -5,6 +5,7 @@ package resources
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 	"go.mondoo.com/mql/providers/os/connection/shared"
 	"go.mondoo.com/mql/providers/os/registry"
 	"go.mondoo.com/mql/providers/os/resources/powershell"
+	"go.mondoo.com/mql/types"
 	"go.mondoo.com/ranger-rpc/codes"
 	"go.mondoo.com/ranger-rpc/status"
 )
@@ -170,7 +172,35 @@ func (k *mqlRegistrykey) powershellExists(path string) (bool, error) {
 }
 
 // GetEntries returns a list of registry key property resources
+// getEntries returns the values of the key and fails when any of them could
+// not be read. The typed Windows resources (LSA, Schannel, the spooler, ...)
+// read Value.Number and Value.String directly, so an unread value would reach
+// them as 0 or "" and report a setting as off. Only items() tolerates a
+// per-value failure, because it can hand the error to that value's fields.
 func (k *mqlRegistrykey) getEntries() ([]registry.RegistryKeyItem, error) {
+	entries, err := k.readEntries()
+	if err != nil {
+		return nil, err
+	}
+	if err := registryValueError(k.Path.Data, entries); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+// registryValueError returns the error of the first value of a key that could
+// not be read, or nil.
+func registryValueError(path string, entries []registry.RegistryKeyItem) error {
+	for i := range entries {
+		if entries[i].Value.Err != nil {
+			return fmt.Errorf("could not read registry value %s of %s: %w", entries[i].Key, path, entries[i].Value.Err)
+		}
+	}
+	return nil
+}
+
+// readEntries returns the values of the key, each carrying its own read error.
+func (k *mqlRegistrykey) readEntries() ([]registry.RegistryKeyItem, error) {
 	conn := k.MqlRuntime.Connection.(shared.Connection)
 
 	if k.isUserHive() {
@@ -222,7 +252,11 @@ func (k *mqlRegistrykey) powershellItems(path string) ([]registry.RegistryKeyIte
 		return nil, stdout.Error
 	}
 
-	return registry.ParsePowershellRegistryKeyItems(strings.NewReader(stdout.Data))
+	items, err := registry.ParsePowershellRegistryKeyItems(strings.NewReader(stdout.Data))
+	if err != nil {
+		return nil, fmt.Errorf("could not read the values of registry key %s: %w", path, err)
+	}
+	return items, nil
 }
 
 // Deprecated: properties returns the properties of a registry key
@@ -248,7 +282,7 @@ func (k *mqlRegistrykey) properties() (map[string]any, error) {
 
 // items returns a list of registry key property resources
 func (k *mqlRegistrykey) items() ([]any, error) {
-	entries, err := k.getEntries()
+	entries, err := k.readEntries()
 	if err != nil {
 		return nil, err
 	}
@@ -262,12 +296,24 @@ func (k *mqlRegistrykey) items() ([]any, error) {
 	// shared across users) and so direct reads resolve the same hive.
 	items := make([]any, len(entries))
 	for i, entry := range entries {
+		value := llx.StringData(entry.String())
+		typ := llx.StringData(entry.Kind())
+		data := llx.DictData(entry.GetRawValue())
+		// A value whose type could not be read exists, but its type and data
+		// are unknown: each of those fields carries the error rather than a
+		// NONE that reads as "empty".
+		if entry.Value.Err != nil {
+			err := fmt.Errorf("could not read registry value %s of %s: %w", entry.Key, k.Path.Data, entry.Value.Err)
+			value = &llx.RawData{Type: types.String, Error: err}
+			typ = &llx.RawData{Type: types.String, Error: err}
+			data = &llx.RawData{Type: types.Dict, Error: err}
+		}
 		o, err := CreateResource(k.MqlRuntime, "registrykey.property", map[string]*llx.RawData{
 			"path":      llx.StringData(k.Path.Data),
 			"name":      llx.StringData(entry.Key),
-			"value":     llx.StringData(entry.String()),
-			"type":      llx.StringData(entry.Kind()),
-			"data":      llx.DictData(entry.GetRawValue()),
+			"value":     value,
+			"type":      typ,
+			"data":      data,
 			"exists":    llx.BoolData(true),
 			"userSid":   llx.StringData(k.UserSid.Data),
 			"ntuserDat": llx.StringData(k.NtuserDat.Data),
