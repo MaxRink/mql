@@ -70,6 +70,10 @@ const (
 
 const sshdEffectiveConfigCommand = "sshd -T"
 
+// Solaris and illumos install sshd in /usr/lib/ssh, which is on no user's
+// PATH, not even root's.
+const solarisSshdEffectiveConfigCommand = "/usr/lib/ssh/sshd -T"
+
 func (s *mqlSshdConfig) id() (string, error) {
 	file := s.GetFile()
 	if file.Error != nil {
@@ -88,6 +92,14 @@ func (s *mqlSshdConfig) isWindows() bool {
 		return false
 	}
 	return conn.Asset().Platform.IsFamily(inventory.FAMILY_WINDOWS)
+}
+
+func (s *mqlSshdConfig) isSolaris() bool {
+	conn, ok := s.MqlRuntime.Connection.(shared.Connection)
+	if !ok || conn.Asset() == nil || conn.Asset().Platform == nil {
+		return false
+	}
+	return conn.Asset().Platform.Name == "solaris"
 }
 
 func (s *mqlSshdConfig) file() (*mqlFile, error) {
@@ -483,8 +495,12 @@ func (s *mqlSshdConfig) effectiveConfigCommand() (string, error) {
 	if file.Error != nil {
 		return "", file.Error
 	}
+	command := sshdEffectiveConfigCommand
+	if s.isSolaris() {
+		command = solarisSshdEffectiveConfigCommand
+	}
 	if file.Data == nil || file.Data.Path.Data == "" {
-		return sshdEffectiveConfigCommand, nil
+		return command, nil
 	}
 	path := file.Data.Path.Data
 	if s.isWindows() {
@@ -494,19 +510,19 @@ func (s *mqlSshdConfig) effectiveConfigCommand() (string, error) {
 		// PowerShell. Both strip double quotes, cmd.exe does not strip single
 		// quotes, and a Windows path cannot contain a double quote.
 		if strings.EqualFold(path, windowsDefaultSshdConfig) {
-			return sshdEffectiveConfigCommand, nil
+			return command, nil
 		}
 		// Inside double quotes cmd.exe still expands %VAR% and PowerShell
 		// expands $var, $(...) and backtick escapes; & | < > stay literal.
 		if strings.ContainsAny(path, "\"%$`") {
 			return "", fmt.Errorf("cannot run sshd -T for %q: the path contains a character the Windows shell would expand", path)
 		}
-		return sshdEffectiveConfigCommand + ` -f "` + path + `"`, nil
+		return command + ` -f "` + path + `"`, nil
 	}
 	if path == defaultSshdConfig {
-		return sshdEffectiveConfigCommand, nil
+		return command, nil
 	}
-	return sshdEffectiveConfigCommand + " -f " + shared.ShellEscape(path), nil
+	return command + " -f " + shared.ShellEscape(path), nil
 }
 
 func effectiveConfigEntrySlice(params map[string]string, key string) ([]any, error) {
