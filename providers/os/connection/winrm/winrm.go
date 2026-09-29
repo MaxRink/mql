@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/masterzen/winrm"
@@ -21,6 +22,14 @@ import (
 )
 
 var _ shared.Connection = (*Connection)(nil)
+
+// maxCommandLength is the longest command WinRM runs. cmd.exe caps its whole
+// command line at powershell.MaxCommandLength (8191) UTF-16 units, and that
+// line includes cmd.exe's own path and /c, which WinRM puts in front of the
+// command: 31 characters for the default C:\Windows\System32\cmd.exe. Measured
+// over WinRM on Windows 11: an 8160-character command runs, 8161 does not. A
+// host whose system root is longer than C:\Windows fails a little earlier.
+const maxCommandLength = powershell.MaxCommandLength - len(`C:\Windows\System32\cmd.exe /c `)
 
 func VerifyConfig(config *inventory.Config) (*winrm.Endpoint, error) {
 	if config.Type != string(shared.Type_Winrm) {
@@ -118,6 +127,28 @@ func (p *Connection) Capabilities() shared.Capabilities {
 	return shared.Capability_File | shared.Capability_RunCommand
 }
 
+// utf16Len counts the UTF-16 code units in s, which is the unit Windows
+// measures a command line in.
+//
+// Neither obvious shorthand is right. len(s) counts UTF-8 bytes, which
+// over-counts every non-ASCII character and would refuse commands that would
+// have run. utf8.RuneCountInString counts code points, which *under*-counts:
+// anything outside the basic multilingual plane is one rune but two UTF-16
+// code units, so a command padded with emoji could slip past the check and be
+// truncated anyway -- the exact failure this guard exists to prevent. Counting
+// the code units directly is neither, and costs one pass with no allocation.
+func utf16Len(s string) int {
+	n := 0
+	for _, r := range s {
+		if r > 0xFFFF {
+			n += 2
+		} else {
+			n++
+		}
+	}
+	return n
+}
+
 func (p *Connection) RunCommand(command string) (*shared.Command, error) {
 	log.Debug().Str("command", command).Str("provider", "winrm").Msg("winrm> run command")
 
@@ -135,6 +166,20 @@ func (p *Connection) RunCommand(command string) (*shared.Command, error) {
 	defer func() {
 		res.Stats.Duration = time.Since(res.Stats.Start)
 	}()
+
+	if n := utf16Len(command); n > maxCommandLength {
+		// Past this the command never runs: WinRM hands it to cmd.exe, which
+		// refuses it. On Windows 11 that is exit 1 and "The command line is
+		// too long." on stderr, with empty stdout; a caller that only parses
+		// stdout reports whatever an empty string means to it --
+		// "unexpected end of JSON input" -- and never learns the command was
+		// too long. Say so instead, before the round trip.
+		err := fmt.Errorf(
+			"command is %d characters, over the %d WinRM allows, so it would not run: %.120s",
+			n, maxCommandLength, command)
+		log.Error().Err(err).Msg("winrm command too long")
+		return res, err
+	}
 
 	// Note: winrm does not return err of the command was executed with a non-zero exit code
 	exitCode, err := p.Client.RunWithContext(context.Background(), command, stdoutBuffer, stderrBuffer)
