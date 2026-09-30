@@ -605,6 +605,7 @@ func init() {
 			string("<=" + types.String):  {f: versionLTEversion, Label: "<="},
 			string(">=" + types.String):  {f: versionGTEversion, Label: ">="},
 			"epoch":                      {f: versionEpoch},
+			"stripEpoch":                 {f: versionStripEpoch},
 			"inRange":                    {f: versionInRange, Label: "inRange"},
 		},
 		types.IP: {
