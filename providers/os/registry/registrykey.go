@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"go.mondoo.com/mql/llx"
 	"go.mondoo.com/mql/providers-sdk/v1/util/convert"
 )
 
@@ -76,7 +77,13 @@ func (k RegistryKeyItem) Kind() string {
 	return "<unsupported>"
 }
 
+// GetRawValue returns the value's data, or nil when it has none. A value that
+// failed to decode (Value.Err) has no data either; callers report Value.Err
+// instead of reading this.
 func (k RegistryKeyItem) GetRawValue() any {
+	if k.Value.Err != nil {
+		return nil
+	}
 	switch k.Value.Kind {
 	case NONE:
 		return nil
@@ -189,12 +196,26 @@ func resolveRegistryValueKind(typeName string, kind *int) (int, error) {
 	return NONE, errors.New("could not determine the registry value type: reg.exe reported no type for this value and RegistryKey.GetValueKind() returned nothing (it is refused under PowerShell Constrained Language Mode)")
 }
 
+// classifyUntypedValue classifies the failure to type a value. Outside
+// FullLanguage, GetValueKind() was refused by the host's language policy (what
+// WDAC and AppLocker enforce), which is a refusal: forbidden. Otherwise
+// nothing says why, so the error stays unclassified.
+func classifyUntypedValue(err error, languageMode string) error {
+	if languageMode == "" || strings.EqualFold(languageMode, "FullLanguage") {
+		return err
+	}
+	return llx.Forbidden(fmt.Errorf("%w; PowerShell runs in %s on this host", err, languageMode))
+}
+
 type keyKindRaw struct {
 	// Kind is the numeric value kind from RegistryKey.GetValueKind(). It is
 	// absent whenever the collection script could not invoke that method.
 	Kind *int
 	// Type is the reg.exe type name, e.g. REG_DWORD.
 	Type string
+	// LanguageMode is the PowerShell session's language mode, sent only for a
+	// value neither reg.exe nor GetValueKind() could type.
+	LanguageMode string
 	// Data holds numbers as json.Number, so a REG_QWORD keeps all 64 bits.
 	Data any
 }
@@ -235,7 +256,7 @@ func (k *RegistryKeyValue) UnmarshalJSON(b []byte) error {
 		// page) has no type under Constrained Language Mode. Failing the
 		// decode would discard every other value of the key with it, so the
 		// failure stays with this value.
-		k.Err = err
+		k.Err = classifyUntypedValue(err, raw.LanguageMode)
 		return nil
 	}
 	k.Kind = kind
