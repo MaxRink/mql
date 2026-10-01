@@ -5,6 +5,7 @@ package resources
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -201,6 +202,35 @@ type mqlWindowsInternal struct {
 	// unpopulated slice must not be mistaken for a genuine empty result.
 	hotfixesRaw    []packages.PowershellWinHotFix
 	hotfixesRawSet bool
+
+	// optionalFeatureLookups holds the outcome of every
+	// windows.optionalFeature(name: …) lookup on this runtime, keyed by the
+	// exact name. The resource's init runs on every lookup, before the
+	// resource cache is consulted, so without it each check that reads the
+	// same feature (a benchmark reads SMB1Protocol from several checks and
+	// filters) started Get-WindowsOptionalFeature again. optionalFeatureLock
+	// guards only the map; each entry has its own lock, held while its query
+	// runs, so concurrent lookups of one name wait for the first while other
+	// names and the hotfix state behind lock are not held up.
+	optionalFeatureLock    sync.Mutex
+	optionalFeatureLookups map[string]*optionalFeatureEntry
+}
+
+// optionalFeatureEntry is the cache slot for one feature name.
+type optionalFeatureEntry struct {
+	mu     sync.Mutex
+	done   bool
+	lookup optionalFeatureLookup
+}
+
+// optionalFeatureLookup is one cached windows.optionalFeature(name: …)
+// outcome: the feature's fields, or notFound when the query succeeded and the
+// image has no feature of that exact name. A query that fails (an error
+// running it, a non-zero exit, output that does not parse) is not cached, so
+// a transient failure does not stick for the rest of the scan.
+type optionalFeatureLookup struct {
+	feature  windows.WindowsOptionalFeature
+	notFound bool
 }
 
 func (w *mqlWindows) hotfixes() ([]any, error) {
@@ -393,41 +423,93 @@ func initWindowsOptionalFeature(runtime *plugin.Runtime, args map[string]*llx.Ra
 		return args, nil, nil
 	}
 
-	encodedCmd := powershell.Encode(windows.OptionalFeatureQuery(name))
-	executedCmd, err := conn.RunCommand(encodedCmd)
+	obj, err := NewResource(runtime, "windows", nil)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// a non-zero exit means the feature name is unknown
-	if executedCmd.ExitStatus != 0 {
+	lookup, err := obj.(*mqlWindows).lookupOptionalFeature(conn, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	if lookup.notFound {
 		return nil, nil, errors.New("could not find feature " + name)
+	}
+
+	feature := lookup.feature
+	return map[string]*llx.RawData{
+		"name":        llx.StringData(feature.Name),
+		"displayName": llx.StringData(feature.DisplayName),
+		"description": llx.StringData(feature.Description),
+		"enabled":     llx.BoolData(feature.Enabled),
+		"state":       llx.IntData(feature.State),
+	}, nil, nil
+}
+
+// lookupOptionalFeature runs the targeted query for one feature name once per
+// runtime and remembers the outcome (see optionalFeatureLookups). Concurrent
+// lookups of the same name wait for the first instead of querying again;
+// lookups of different names run concurrently.
+func (w *mqlWindows) lookupOptionalFeature(conn shared.Connection, name string) (optionalFeatureLookup, error) {
+	w.optionalFeatureLock.Lock()
+	if w.optionalFeatureLookups == nil {
+		w.optionalFeatureLookups = map[string]*optionalFeatureEntry{}
+	}
+	e, ok := w.optionalFeatureLookups[name]
+	if !ok {
+		e = &optionalFeatureEntry{}
+		w.optionalFeatureLookups[name] = e
+	}
+	w.optionalFeatureLock.Unlock()
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.done {
+		return e.lookup, nil
+	}
+	lookup, err := w.queryOptionalFeature(conn, name)
+	if err != nil {
+		// not cached: a transient failure does not stick for the scan
+		return optionalFeatureLookup{}, err
+	}
+	e.lookup, e.done = lookup, true
+	return lookup, nil
+}
+
+// queryOptionalFeature runs the query for one feature name.
+func (w *mqlWindows) queryOptionalFeature(conn shared.Connection, name string) (optionalFeatureLookup, error) {
+	executedCmd, err := conn.RunCommand(powershell.Encode(windows.OptionalFeatureQuery(name)))
+	if err != nil {
+		return optionalFeatureLookup{}, err
+	}
+
+	// An unknown name exits 0 with no output. A non-zero exit is a query that
+	// failed (no elevation, a DISM error), not an absent feature: it is
+	// reported, and not cached as not found.
+	if executedCmd.ExitStatus != 0 {
+		var stderr []byte
+		if executedCmd.Stderr != nil {
+			stderr, _ = io.ReadAll(executedCmd.Stderr)
+		}
+		msg := powershellErrorMessage(string(powershell.DecodeCLIXML(stderr)))
+		if msg == "" {
+			return optionalFeatureLookup{}, fmt.Errorf("could not query optional feature %s: exit status %d", name, executedCmd.ExitStatus)
+		}
+		return optionalFeatureLookup{}, fmt.Errorf("could not query optional feature %s: %s", name, msg)
 	}
 
 	features, err := windows.ParseWindowsOptionalFeatures(executedCmd.Stdout)
 	if err != nil {
-		return nil, nil, err
+		return optionalFeatureLookup{}, err
 	}
-
 	// DISM treats `*`/`?` in -FeatureName as wildcards, so a wildcard-ish name
 	// can return more than one feature (or none matching exactly); require an
 	// exact name match to keep the historic "could not find feature" behavior.
 	for i := range features {
-		feature := features[i]
-		if feature.Name != name {
-			continue
+		if features[i].Name == name {
+			return optionalFeatureLookup{feature: features[i]}, nil
 		}
-		return map[string]*llx.RawData{
-			"name":        llx.StringData(feature.Name),
-			"displayName": llx.StringData(feature.DisplayName),
-			"description": llx.StringData(feature.Description),
-			"enabled":     llx.BoolData(feature.Enabled),
-			"state":       llx.IntData(feature.State),
-		}, nil, nil
 	}
-
-	// if the feature cannot be found we return an error
-	return nil, nil, errors.New("could not find feature " + name)
+	return optionalFeatureLookup{notFound: true}, nil
 }
 
 // optionalFeatureDetails carries the display name and description of every
