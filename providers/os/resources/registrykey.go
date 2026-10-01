@@ -39,14 +39,54 @@ func userHivePath(sid, subPath string) string {
 	return `HKEY_USERS\` + sid + `\` + subPath
 }
 
+// registryReadPath is the path a registry key is read with: the spelling of
+// the query, with its separators collapsed and trimmed. Spellings that differ
+// only in separators share one resource (see registryIDPath), so the read must
+// not depend on which of them created it: Windows refuses an empty segment
+// right after the hive (HKLM\\SOFTWARE), PowerShell reports such a key as
+// missing and RegOpenKeyEx as an invalid path, while the collapsed path reads
+// the key in both.
+func registryReadPath(path string) string {
+	var parts []string
+	for _, p := range strings.Split(path, `\`) {
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return strings.Join(parts, `\`)
+}
+
+// registryIDPath is the form of a registry key path that the resource ids use.
+// Registry paths are case-insensitive, so every spelling of a key maps to one
+// id: the resources share one cache entry, and a remote scan reads the key
+// with one PowerShell run instead of one per spelling. It is the read path
+// (registryReadPath), lower-cased, with the HKLM and HKCU abbreviations
+// replaced by the hive's full name. The resource's `path` field keeps the
+// spelling of the query that created it.
+func registryIDPath(path string) string {
+	parts := strings.Split(strings.ToLower(registryReadPath(path)), `\`)
+	switch parts[0] {
+	case "hklm":
+		parts[0] = "hkey_local_machine"
+	case "hkcu":
+		parts[0] = "hkey_current_user"
+	}
+	return strings.Join(parts, `\`)
+}
+
 func (k *mqlRegistrykey) id() (string, error) {
 	// When reading a per-user hive, `path` is relative to that user's HKCU and is
 	// shared across users — fold the SID into the id so each user's key (and the
 	// properties derived from it) caches separately.
 	if k.UserSid.Data != "" {
-		return userHivePath(k.UserSid.Data, k.Path.Data), nil
+		return registryIDPath(userHivePath(k.UserSid.Data, k.Path.Data)), nil
 	}
-	return k.Path.Data, nil
+	return registryIDPath(k.Path.Data), nil
+}
+
+// readPath is the key's path to read with; see registryReadPath.
+func (k *mqlRegistrykey) readPath() string {
+	return registryReadPath(k.Path.Data)
 }
 
 // isUserHive reports whether this key targets a specific user's registry hive.
@@ -119,7 +159,7 @@ func powershellErrorMessage(stderr string) string {
 func (k *mqlRegistrykey) userHiveReader(conn shared.Connection) (livePath string, rh *registry.RegistryHandler, ok bool, err error) {
 	sid := k.UserSid.Data
 	if registry.IsUserHiveLoaded(sid) {
-		return userHivePath(sid, k.Path.Data), nil, true, nil
+		return userHivePath(sid, k.readPath()), nil, true, nil
 	}
 	loader, isLoader := conn.(userHiveLoader)
 	if !isLoader || k.NtuserDat.Data == "" {
@@ -146,7 +186,7 @@ func (k *mqlRegistrykey) nativeUserHiveItems(conn shared.Connection) ([]registry
 		return nil, nil
 	}
 	if rh != nil {
-		return rh.GetUserHiveKeyItems(k.UserSid.Data, k.Path.Data)
+		return rh.GetUserHiveKeyItems(k.UserSid.Data, k.readPath())
 	}
 	return registry.GetNativeRegistryKeyItems(livePath)
 }
@@ -160,7 +200,7 @@ func (k *mqlRegistrykey) nativeUserHiveChildren(conn shared.Connection) ([]regis
 		return nil, nil
 	}
 	if rh != nil {
-		return rh.GetUserHiveKeyChildren(k.UserSid.Data, k.Path.Data)
+		return rh.GetUserHiveKeyChildren(k.UserSid.Data, k.readPath())
 	}
 	return registry.GetNativeRegistryKeyChildren(livePath)
 }
@@ -185,12 +225,12 @@ func (k *mqlRegistrykey) exists() (bool, error) {
 			}
 			return len(items) > 0, nil
 		}
-		return k.powershellExists(userHivePath(k.UserSid.Data, k.Path.Data))
+		return k.powershellExists(userHivePath(k.UserSid.Data, k.readPath()))
 	}
 
 	// if we are running locally on windows, we can use native api
 	if conn.Type() == shared.Type_Local && runtime.GOOS == "windows" {
-		items, err := registry.GetNativeRegistryKeyItems(k.Path.Data)
+		items, err := registry.GetNativeRegistryKeyItems(k.readPath())
 		if err == nil && len(items) > 0 {
 			return true, nil
 		}
@@ -203,7 +243,7 @@ func (k *mqlRegistrykey) exists() (bool, error) {
 		}
 	}
 
-	return k.powershellExists(k.Path.Data)
+	return k.powershellExists(k.readPath())
 }
 
 // powershellExists checks key existence at an absolute registry path by running
@@ -275,15 +315,15 @@ func (k *mqlRegistrykey) readEntries() ([]registry.RegistryKeyItem, error) {
 		if conn.Type() == shared.Type_Local && runtime.GOOS == "windows" {
 			return k.nativeUserHiveItems(conn)
 		}
-		return k.powershellItems(userHivePath(k.UserSid.Data, k.Path.Data))
+		return k.powershellItems(userHivePath(k.UserSid.Data, k.readPath()))
 	}
 
 	// if we are running locally on windows, we can use native api
 	if conn.Type() == shared.Type_Local && runtime.GOOS == "windows" {
-		return registry.GetNativeRegistryKeyItems(k.Path.Data)
+		return registry.GetNativeRegistryKeyItems(k.readPath())
 	}
 
-	return k.powershellItems(k.Path.Data)
+	return k.powershellItems(k.readPath())
 }
 
 // powershellItems reads the values of a key at an absolute registry path via the
@@ -405,11 +445,11 @@ func (k *mqlRegistrykey) getChildren() ([]registry.RegistryKeyChild, error) {
 	case k.isUserHive() && conn.Type() == shared.Type_Local && runtime.GOOS == "windows":
 		return k.nativeUserHiveChildren(conn)
 	case k.isUserHive():
-		return k.powershellChildren(userHivePath(k.UserSid.Data, k.Path.Data))
+		return k.powershellChildren(userHivePath(k.UserSid.Data, k.readPath()))
 	case conn.Type() == shared.Type_Local && runtime.GOOS == "windows":
-		return registry.GetNativeRegistryKeyChildren(k.Path.Data)
+		return registry.GetNativeRegistryKeyChildren(k.readPath())
 	default:
-		return k.powershellChildren(k.Path.Data)
+		return k.powershellChildren(k.readPath())
 	}
 }
 
@@ -459,11 +499,14 @@ func (k *mqlRegistrykey) powershellChildren(path string) ([]registry.RegistryKey
 }
 
 func (p *mqlRegistrykeyProperty) id() (string, error) {
-	// Fold the SID in for per-user hive reads — see mqlRegistrykey.id.
+	// Fold the SID in for per-user hive reads, and fold the case of the path and
+	// the value name, which the registry treats case-insensitively too — see
+	// mqlRegistrykey.id.
+	name := strings.ToLower(p.Name.Data)
 	if p.UserSid.Data != "" {
-		return userHivePath(p.UserSid.Data, p.Path.Data) + " - " + p.Name.Data, nil
+		return registryIDPath(userHivePath(p.UserSid.Data, p.Path.Data)) + " - " + name, nil
 	}
-	return p.Path.Data + " - " + p.Name.Data, nil
+	return registryIDPath(p.Path.Data) + " - " + name, nil
 }
 
 func initRegistrykeyProperty(runtime *plugin.Runtime, args map[string]*llx.RawData) (map[string]*llx.RawData, plugin.Resource, error) {
