@@ -1311,6 +1311,7 @@ func getPackageFromRegistryKeyItems(children []registry.RegistryKeyItem, platfor
 	var displayVersion string
 	var publisher string
 	var installLocation string
+	var installDate string
 
 	for _, i := range children {
 		switch i.Key {
@@ -1324,6 +1325,9 @@ func getPackageFromRegistryKeyItems(children []registry.RegistryKeyItem, platfor
 			publisher = i.Value.String
 		case "InstallLocation":
 			installLocation = i.Value.String
+		case "InstallDate":
+			// YYYYMMDD, as ParseWindowsAppPackages reads it on the remote path.
+			installDate = i.Value.String
 		}
 	}
 
@@ -1348,6 +1352,7 @@ func getPackageFromRegistryKeyItems(children []registry.RegistryKeyItem, platfor
 	}
 
 	pkg := createPackage(displayName, displayVersion, "windows/app", arch, publisher, installLocation, platform)
+	pkg.InstallDate = parseWinInstallDate(installDate)
 
 	return pkg, uninstallString
 }
