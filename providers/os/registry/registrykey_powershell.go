@@ -75,38 +75,56 @@ func ParsePowershellRegistryKeyChildren(r io.Reader) ([]RegistryKeyChild, error)
 // ObjectNotFound) is what the resource classifies. A Write-Error of its own
 // would add a record that echoes the whole encoded script.
 //
-// Value *data* still comes from Get-ItemProperty: reg.exe prints REG_EXPAND_SZ
-// values unexpanded, so sourcing data from it would change what every existing
-// query returns.
+// Value data comes from Get-ItemProperty, except for REG_EXPAND_SZ:
+// Get-ItemProperty expands environment variables, but the native path reads
+// the value as stored, which is what is configured (%SystemRoot%\...), so the
+// script reads it unexpanded too, with RegistryKey.GetValue and
+// DoNotExpandEnvironmentNames. Where language mode refuses that method, it
+// takes the data reg.exe printed, which is unexpanded as well.
+//
+// .NET returns no data at all for REG_LINK and the resource-list kinds
+// (RegistryValueKind.Unknown), so for those the script also emits the hex
+// reg.exe prints, and the decoder reads the value's bytes from it.
+// REG_RESOURCE_REQUIREMENTS_LIST cannot be read this way: reg.exe does not know
+// the type and prints it as REG_NONE, which carries no data on either path.
 const getRegistryKeyItemScript = `
 $path = %s
 $reg = Get-Item ('Registry::' + $path) -ErrorAction Stop
 $regExe = $env:SystemRoot + '\System32\reg.exe'
 $types = @{}
+$regData = @{}
 & $regExe query $path 2>$null | ForEach-Object {
-  if ($_ -match '^\s{4}(.+?)\s{4}(REG_[A-Z_]+)(\s{4}|$)') {
+  if ($_ -match '^\s{4}(.+?)\s{4}(REG_[A-Z_]+)(?:\s{4}(.*))?$') {
     $types[$matches[1]] = $matches[2]
+    $regData[$matches[1]] = $matches[3]
   }
 }
 $defaultType = $null
+$defaultData = $null
 if ($reg.Property -contains '(default)') {
   # reg.exe names the default value in the console locale, so it is read
   # through its own query instead of being matched by name.
   & $regExe query $path /ve 2>$null | ForEach-Object {
-    if ($_ -match '^\s{4}.+?\s{4}(REG_[A-Z_]+)(\s{4}|$)') { $defaultType = $matches[1] }
+    if ($_ -match '^\s{4}.+?\s{4}(REG_[A-Z_]+)(?:\s{4}(.*))?$') {
+      $defaultType = $matches[1]
+      $defaultData = $matches[2]
+    }
   }
 }
 $properties = @()
 $reg.Property | ForEach-Object {
-    $fetchKeyValue = $_
-    $type = $types[$_]
-    if ("(default)".Equals($_)) {
+    $name = $_
+    $fetchKeyValue = $name
+    $type = $types[$name]
+    $printed = $regData[$name]
+    if ("(default)".Equals($name)) {
       $fetchKeyValue = ''
       $type = $defaultType
+      $printed = $defaultData
     }
-    $data = $(Get-ItemProperty ('Registry::' + $path)).$_;
+    $data = $(Get-ItemProperty ('Registry::' + $path)).$name;
     if ($data -is [string[]]) {
-      $data = $(Get-ItemProperty ('Registry::' + $path)) | Select-Object -ExpandProperty $_
+      $data = $(Get-ItemProperty ('Registry::' + $path)) | Select-Object -ExpandProperty $name
     }
     $kind = $null
     $languageMode = $null
@@ -114,13 +132,25 @@ $reg.Property | ForEach-Object {
       try { $kind = $reg.GetValueKind($fetchKeyValue) } catch { $kind = $null }
       if ($kind -eq $null) { $languageMode = [string]$ExecutionContext.SessionState.LanguageMode }
     }
+    if ($type -eq 'REG_EXPAND_SZ' -or "$kind" -eq 'ExpandString') {
+      try {
+        $data = $reg.GetValue($fetchKeyValue, $null, 'DoNotExpandEnvironmentNames')
+      } catch {
+        if ($printed -ne $null) { $data = $printed }
+      }
+    }
+    $hex = $null
+    if ($data -eq $null -and @('REG_LINK', 'REG_RESOURCE_LIST', 'REG_FULL_RESOURCE_DESCRIPTOR') -contains $type) {
+      $hex = $printed
+    }
     $entry = New-Object psobject -Property @{
-      "key" = $_
+      "key" = $name
       "value" = New-Object psobject -Property @{
         "data" = $data;
         "kind" = $kind;
         "type" = $type;
         "languageMode" = $languageMode;
+        "hex" = $hex;
       }
     }
     $properties += $entry

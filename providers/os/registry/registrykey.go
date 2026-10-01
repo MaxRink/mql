@@ -5,13 +5,13 @@ package registry
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/rs/zerolog/log"
 	"go.mondoo.com/mql/llx"
 	"go.mondoo.com/mql/providers-sdk/v1/util/convert"
 )
@@ -66,11 +66,11 @@ func (k RegistryKeyItem) Kind() string {
 	case MULTI_SZ:
 		return "multistring"
 	case RESOURCE_LIST:
-		return "<unsupported>"
+		return "resourcelist"
 	case FULL_RESOURCE_DESCRIPTOR:
-		return "<unsupported>"
+		return "fullresourcedescriptor"
 	case RESOURCE_REQUIREMENTS_LIST:
-		return "<unsupported>"
+		return "resourcerequirementslist"
 	case QWORD:
 		return "qword"
 	}
@@ -96,17 +96,13 @@ func (k RegistryKeyItem) GetRawValue() any {
 	case DWORD:
 		return k.Value.Number
 	case DWORD_BIG_ENDIAN:
-		return nil
+		return k.Value.Number
 	case LINK:
-		return nil
+		return k.Value.String
 	case MULTI_SZ:
 		return convert.SliceAnyToInterface(k.Value.MultiString)
-	case RESOURCE_LIST:
-		return nil
-	case FULL_RESOURCE_DESCRIPTOR:
-		return nil
-	case RESOURCE_REQUIREMENTS_LIST:
-		return nil
+	case RESOURCE_LIST, FULL_RESOURCE_DESCRIPTOR, RESOURCE_REQUIREMENTS_LIST:
+		return binaryToDict(k.Value.Binary)
 	case QWORD:
 		return k.Value.Number
 	}
@@ -218,6 +214,9 @@ type keyKindRaw struct {
 	LanguageMode string
 	// Data holds numbers as json.Number, so a REG_QWORD keeps all 64 bits.
 	Data any
+	// Hex is the value's data as reg.exe prints it, for the kinds .NET
+	// returns no data for (REG_LINK and the resource lists).
+	Hex string
 }
 
 // registryInt64 reads a whole number out of decoded JSON data exactly.
@@ -238,6 +237,34 @@ func registryInt64(v any) (int64, bool) {
 		return 0, false
 	}
 	return int64(u), true
+}
+
+// bytesToJSON gives bytes the form ConvertTo-Json gives a byte[], so they
+// decode through registryBytes like the data .NET returns.
+func bytesToJSON(data []byte) []any {
+	res := make([]any, len(data))
+	for i, b := range data {
+		res[i] = json.Number(strconv.Itoa(int(b)))
+	}
+	return res
+}
+
+// registryBytes reads a byte array out of decoded JSON data: the form
+// ConvertTo-Json gives a byte[] registry value.
+func registryBytes(v any) ([]byte, error) {
+	rawData, ok := v.([]any)
+	if !ok {
+		return nil, fmt.Errorf("registry key value is not a byte array: %v", v)
+	}
+	data := make([]byte, len(rawData))
+	for i, e := range rawData {
+		val, ok := registryInt64(e)
+		if !ok || val < 0 || val > 255 {
+			return nil, fmt.Errorf("registry key value is not a byte array: %v", v)
+		}
+		data[i] = byte(val)
+	}
+	return data, nil
 }
 
 func (k *RegistryKeyValue) UnmarshalJSON(b []byte) error {
@@ -261,6 +288,14 @@ func (k *RegistryKeyValue) UnmarshalJSON(b []byte) error {
 	}
 	k.Kind = kind
 
+	if raw.Data == nil && raw.Hex != "" {
+		data, err := hex.DecodeString(raw.Hex)
+		if err != nil {
+			k.Err = fmt.Errorf("registry value data %q is not hex: %w", raw.Hex, err)
+			return nil
+		}
+		raw.Data = bytesToJSON(data)
+	}
 	if raw.Data == nil {
 		return nil
 	}
@@ -282,17 +317,9 @@ func (k *RegistryKeyValue) UnmarshalJSON(b []byte) error {
 		}
 		k.String = value
 	case BINARY: // Binary data
-		rawData, ok := raw.Data.([]any)
-		if !ok {
-			return fmt.Errorf("registry key value is not a byte array: %v", raw.Data)
-		}
-		data := make([]byte, len(rawData))
-		for i, v := range rawData {
-			val, ok := registryInt64(v)
-			if !ok || val < 0 || val > 255 {
-				return fmt.Errorf("registry key value is not a byte array: %v", raw.Data)
-			}
-			data[i] = byte(val)
+		data, err := registryBytes(raw.Data)
+		if err != nil {
+			return err
 		}
 		k.Binary = data
 	case DWORD: // A number that is a valid UInt32
@@ -303,18 +330,36 @@ func (k *RegistryKeyValue) UnmarshalJSON(b []byte) error {
 		// string fallback
 		k.Number = number
 		k.String = strconv.FormatInt(number, 10)
-	case DWORD_BIG_ENDIAN:
-		log.Warn().Msg("DWORD_BIG_ENDIAN for registry key is not supported")
-	case LINK:
-		log.Warn().Msg("LINK for registry key is not supported")
+	case DWORD_BIG_ENDIAN, LINK, RESOURCE_LIST, FULL_RESOURCE_DESCRIPTOR, RESOURCE_REQUIREMENTS_LIST:
+		// .NET's RegistryKey.GetValue, and so Get-ItemProperty, returns these
+		// kinds as their raw bytes. They decode like the stored value does on
+		// the native path, so both paths report the same data. Data that is
+		// not a byte array fails this value alone, as a value that does not
+		// fit its kind does, rather than every value of the key.
+		data, err := registryBytes(raw.Data)
+		if err != nil {
+			k.Err = err
+			return nil
+		}
+		decoded := decodeRawRegistryValue(uint32(kind), data)
+		decoded.Kind = kind
+		if decoded.Err != nil {
+			k.Err = decoded.Err
+			return nil
+		}
+		*k = decoded
 	case MULTI_SZ: // A multiline string
 		switch value := raw.Data.(type) {
 		case string:
 			k.String = value
+			// An empty REG_MULTI_SZ is an empty list, as the native path
+			// reports it.
+			k.MultiString = []string{}
 			if value != "" {
 				k.MultiString = []string{value}
 			}
 		case []any:
+			k.MultiString = []string{}
 			if len(value) > 0 {
 				var multiString []string
 				for _, v := range value {
@@ -337,12 +382,6 @@ func (k *RegistryKeyValue) UnmarshalJSON(b []byte) error {
 				}
 			}
 		}
-	case RESOURCE_LIST:
-		log.Warn().Msg("RESOURCE_LIST for registry key is not supported")
-	case FULL_RESOURCE_DESCRIPTOR:
-		log.Warn().Msg("FULL_RESOURCE_DESCRIPTOR for registry key is not supported")
-	case RESOURCE_REQUIREMENTS_LIST:
-		log.Warn().Msg("RESOURCE_REQUIREMENTS_LIST for registry key is not supported")
 	case QWORD: // A number that is a valid UInt64
 		number, ok := registryInt64(raw.Data)
 		if !ok {
