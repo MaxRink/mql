@@ -335,3 +335,229 @@ func TestResolveUnitEnv_PrefersUsrLibOverLib(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "/usr/lib/systemd/system/ollama.service", env.FragmentPath)
 }
+
+// dropInProbe is the layout of a throwaway unit, mqlt-a-b.service, with
+// clashing drop-ins at every level systemd reads: the unit's own directory,
+// both dash prefixes (mqlt-a-.service.d, mqlt-.service.d) and the type-level
+// service.d, spread over /etc, /run and /usr/lib. Each value names where it
+// came from, so the winner of every clash is visible in the environment.
+var dropInProbe = map[string]string{
+	"/run/systemd/system/mqlt-a-b.service":                     "[Service]\nType=oneshot\nExecStart=/bin/true\n",
+	"/etc/systemd/system/service.d/50-proxy.conf":              "[Service]\nEnvironment=HTTPS_PROXY=http://proxy.example.com:3128 NO_PROXY=localhost,127.0.0.1\n",
+	"/etc/systemd/system/service.d/60-x.conf":                  "[Service]\nEnvironment=X60=etc-type\n",
+	"/run/systemd/system/mqlt-a-b.service.d/60-x.conf":         "[Service]\nEnvironment=X60=run-unit\n",
+	"/etc/systemd/system/service.d/61-y.conf":                  "[Service]\nEnvironment=X61=etc-type\n",
+	"/usr/lib/systemd/system/mqlt-a-b.service.d/61-y.conf":     "[Service]\nEnvironment=X61=usr-unit\n",
+	"/etc/systemd/system/mqlt-.service.d/62-z.conf":            "[Service]\nEnvironment=X62=etc-prefix1\n",
+	"/etc/systemd/system/mqlt-a-b.service.d/62-z.conf":         "[Service]\nEnvironment=X62=etc-unit\n",
+	"/etc/systemd/system/mqlt-.service.d/63-w.conf":            "[Service]\nEnvironment=X63=etc-prefix1\n",
+	"/run/systemd/system/mqlt-a-.service.d/63-w.conf":          "[Service]\nEnvironment=X63=run-prefix2\n",
+	"/etc/systemd/system/mqlt-a-.service.d/64-v.conf":          "[Service]\nEnvironment=X64=etc-prefix2\n",
+	"/usr/lib/systemd/system/mqlt-a-b.service.d/64-v.conf":     "[Service]\nEnvironment=X64=usr-unit\n",
+	"/run/systemd/system/mqlt-a-.service.d/70-p.conf":          "[Service]\nEnvironment=X70=run-prefix2\n",
+	"/usr/lib/systemd/system/service.d/71-q.conf":              "[Service]\nEnvironment=X71=usr-type\n",
+	"/usr/lib/systemd/system/socket.d/72-other-type.conf":      "[Service]\nEnvironment=X72=wrong-type\n",
+	"/etc/systemd/system/mqlt-a-b.service.d/73-not-a-conf.txt": "[Service]\nEnvironment=X73=not-conf\n",
+}
+
+// TestResolveUnitEnv_TypeAndPrefixDropIns pins the result systemctl show
+// reported for dropInProbe on systemd 239 (RHEL 8), 247 (Debian 11), 252
+// (RHEL 9) and 259 (Fedora 44), which all agreed:
+//
+//	DropInPaths=/etc/systemd/system/service.d/50-proxy.conf
+//	  /run/systemd/system/mqlt-a-b.service.d/60-x.conf
+//	  /usr/lib/systemd/system/mqlt-a-b.service.d/61-y.conf
+//	  /etc/systemd/system/mqlt-a-b.service.d/62-z.conf
+//	  /etc/systemd/system/mqlt-.service.d/63-w.conf
+//	  /etc/systemd/system/mqlt-a-.service.d/64-v.conf
+//	  /run/systemd/system/mqlt-a-.service.d/70-p.conf
+//	  /usr/lib/systemd/system/service.d/71-q.conf
+//
+// For a clashing file name the unit's own and its prefix directories rank by
+// directory first (/etc, /run, /usr/lib) and by specificity within one
+// directory, and all of them beat the type-level service.d.
+func TestResolveUnitEnv_TypeAndPrefixDropIns(t *testing.T) {
+	afs := testFs(dropInProbe)
+
+	env, ok := ResolveUnitEnvWithDirs(afs, "mqlt-a-b.service", AllDropInDirs)
+	require.True(t, ok)
+
+	assert.Equal(t, []string{
+		"/etc/systemd/system/service.d/50-proxy.conf",
+		"/run/systemd/system/mqlt-a-b.service.d/60-x.conf",
+		"/usr/lib/systemd/system/mqlt-a-b.service.d/61-y.conf",
+		"/etc/systemd/system/mqlt-a-b.service.d/62-z.conf",
+		"/etc/systemd/system/mqlt-.service.d/63-w.conf",
+		"/etc/systemd/system/mqlt-a-.service.d/64-v.conf",
+		"/run/systemd/system/mqlt-a-.service.d/70-p.conf",
+		"/usr/lib/systemd/system/service.d/71-q.conf",
+	}, env.DropInPaths)
+	assert.Equal(t, map[string]string{
+		"HTTPS_PROXY": "http://proxy.example.com:3128",
+		"NO_PROXY":    "localhost,127.0.0.1",
+		"X60":         "run-unit",
+		"X61":         "usr-unit",
+		"X62":         "etc-unit",
+		"X63":         "etc-prefix1",
+		"X64":         "etc-prefix2",
+		"X70":         "run-prefix2",
+		"X71":         "usr-type",
+	}, env.Vars)
+	assert.Equal(t, "/etc/systemd/system/service.d/50-proxy.conf", env.Sources["HTTPS_PROXY"])
+
+	// Unknown version (systemctl not runnable, e.g. a mounted image) reads
+	// drop-ins the way every supported systemd release does.
+	unknown, ok := ResolveUnitEnv(afs, "mqlt-a-b.service")
+	require.True(t, ok)
+	assert.Equal(t, env.DropInPaths, unknown.DropInPaths)
+}
+
+// TestResolveUnitEnv_PrefixOnlySystemd pins systemd 241 (Debian 10) on the
+// same layout: prefix directories count, the type-level service.d does not.
+//
+//	DropInPaths=/run/systemd/system/mqlt-a-b.service.d/60-x.conf
+//	  /usr/lib/systemd/system/mqlt-a-b.service.d/61-y.conf
+//	  /etc/systemd/system/mqlt-a-b.service.d/62-z.conf
+//	  /etc/systemd/system/mqlt-.service.d/63-w.conf
+//	  /etc/systemd/system/mqlt-a-.service.d/64-v.conf
+//	  /run/systemd/system/mqlt-a-.service.d/70-p.conf
+func TestResolveUnitEnv_PrefixOnlySystemd(t *testing.T) {
+	afs := testFs(dropInProbe)
+
+	env, ok := ResolveUnitEnvWithDirs(afs, "mqlt-a-b.service", DropInDirsForVersion(241, false))
+	require.True(t, ok)
+	assert.Equal(t, []string{
+		"/run/systemd/system/mqlt-a-b.service.d/60-x.conf",
+		"/usr/lib/systemd/system/mqlt-a-b.service.d/61-y.conf",
+		"/etc/systemd/system/mqlt-a-b.service.d/62-z.conf",
+		"/etc/systemd/system/mqlt-.service.d/63-w.conf",
+		"/etc/systemd/system/mqlt-a-.service.d/64-v.conf",
+		"/run/systemd/system/mqlt-a-.service.d/70-p.conf",
+	}, env.DropInPaths)
+	assert.NotContains(t, env.Vars, "HTTPS_PROXY")
+	assert.Equal(t, "run-unit", env.Vars["X60"])
+}
+
+// TestResolveUnitEnv_LegacySystemdIgnoresTypeAndPrefixDropIns pins systemd 219
+// (RHEL 7) and 232 (Debian 9) on the same layout: only the unit's own
+// directories count.
+//
+//	DropInPaths=/run/systemd/system/mqlt-a-b.service.d/60-x.conf
+//	  /usr/lib/systemd/system/mqlt-a-b.service.d/61-y.conf
+//	  /etc/systemd/system/mqlt-a-b.service.d/62-z.conf
+//	  /usr/lib/systemd/system/mqlt-a-b.service.d/64-v.conf
+func TestResolveUnitEnv_LegacySystemdIgnoresTypeAndPrefixDropIns(t *testing.T) {
+	afs := testFs(dropInProbe)
+
+	for _, v := range []int{219, 232, 238} {
+		env, ok := ResolveUnitEnvWithDirs(afs, "mqlt-a-b.service", DropInDirsForVersion(v, false))
+		require.True(t, ok)
+		assert.Equal(t, []string{
+			"/run/systemd/system/mqlt-a-b.service.d/60-x.conf",
+			"/usr/lib/systemd/system/mqlt-a-b.service.d/61-y.conf",
+			"/etc/systemd/system/mqlt-a-b.service.d/62-z.conf",
+			"/usr/lib/systemd/system/mqlt-a-b.service.d/64-v.conf",
+		}, env.DropInPaths, v)
+		assert.NotContains(t, env.Vars, "HTTPS_PROXY", v)
+	}
+}
+
+// When systemd reports the drop-ins, they are the ones applied, even where the
+// directory rules would pick others.
+func TestResolveUnitEnvWithDropIns(t *testing.T) {
+	afs := testFs(dropInProbe)
+
+	reported := []string{
+		"/run/systemd/system/mqlt-a-b.service.d/60-x.conf",
+		"/etc/systemd/system/mqlt-.service.d/63-w.conf",
+	}
+	env, ok := ResolveUnitEnvWithDropIns(afs, "mqlt-a-b.service", reported)
+	require.True(t, ok)
+	assert.Equal(t, reported, env.DropInPaths)
+	assert.Equal(t, map[string]string{"X60": "run-unit", "X63": "etc-prefix1"}, env.Vars)
+
+	_, ok = ResolveUnitEnvWithDropIns(afs, "ollama.service", reported)
+	assert.False(t, ok, "a unit with no unit file is not installed")
+}
+
+func TestParseDropInPaths(t *testing.T) {
+	// Debian 11, systemd 247
+	paths, ok := ParseDropInPaths("LoadState=loaded\nDropInPaths=/etc/systemd/system/service.d/50-proxy.conf /etc/systemd/system/ollama.service.d/override.conf\n")
+	require.True(t, ok)
+	assert.Equal(t, []string{
+		"/etc/systemd/system/service.d/50-proxy.conf",
+		"/etc/systemd/system/ollama.service.d/override.conf",
+	}, paths)
+
+	// Loaded without drop-ins: an authoritative empty list.
+	paths, ok = ParseDropInPaths("LoadState=loaded\nDropInPaths=\n")
+	assert.True(t, ok)
+	assert.Empty(t, paths)
+
+	// A unit systemd does not know (systemctl exits 0 for it).
+	_, ok = ParseDropInPaths("LoadState=not-found\nDropInPaths=\n")
+	assert.False(t, ok)
+
+	_, ok = ParseDropInPaths("LoadState=masked\nDropInPaths=\n")
+	assert.False(t, ok)
+
+	_, ok = ParseDropInPaths("System has not been booted with systemd as init system (PID 1). Can't operate.\n")
+	assert.False(t, ok)
+}
+
+func TestDropInDirsForVersion(t *testing.T) {
+	cases := []struct {
+		version  int
+		backport bool
+		want     DropInDirs
+	}{
+		{0, false, AllDropInDirs},
+		{219, false, DropInDirs{}},
+		{219, true, DropInDirs{}},
+		{232, false, DropInDirs{}},
+		{238, false, DropInDirs{}},
+		{239, false, DropInDirs{Prefix: true}},
+		{241, false, DropInDirs{Prefix: true}},
+		{245, false, DropInDirs{Prefix: true}},
+		{239, true, AllDropInDirs},
+		{246, false, AllDropInDirs},
+		{247, false, AllDropInDirs},
+		{259, false, AllDropInDirs},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, DropInDirsForVersion(c.version, c.backport), "%d backport=%v", c.version, c.backport)
+	}
+}
+
+func TestInstalledVersion(t *testing.T) {
+	cases := map[string]struct {
+		files map[string]string
+		want  int
+	}{
+		// Debian 9, before the /usr merge
+		"debian9": {map[string]string{"/lib/systemd/libsystemd-shared-232.so": ""}, 232},
+		// Debian 10 and 11 after the /usr merge: the same file under both paths
+		"debian10": {map[string]string{
+			"/lib/systemd/libsystemd-shared-241.so":     "",
+			"/usr/lib/systemd/libsystemd-shared-241.so": "",
+		}, 241},
+		// Debian 12 and 13, multiarch directory
+		"debian13": {map[string]string{"/usr/lib/x86_64-linux-gnu/systemd/libsystemd-shared-257.so": ""}, 257},
+		// SLES 15 SP7 and SLES 16.0 put the library in /usr/lib64 and name it
+		// with the full package version; Leap 15.6 uses the short name there
+		"sles15": {map[string]string{"/usr/lib64/systemd/libsystemd-shared-254.27-150600.4.71.2.so": ""}, 254},
+		"sles16": {map[string]string{"/usr/lib64/systemd/libsystemd-shared-257.13-160000.1.1.so": ""}, 257},
+		"leap15": {map[string]string{"/usr/lib64/systemd/libsystemd-shared-254.so": ""}, 254},
+		"none":   {map[string]string{"/usr/lib/systemd/system/ollama.service": ""}, 0},
+	}
+	for name, c := range cases {
+		assert.Equal(t, c.want, InstalledVersion(testFs(c.files)), name)
+	}
+}
+func TestUnitNamePrefixes(t *testing.T) {
+	assert.Equal(t, []string{"foo-bar-.service", "foo-.service"}, unitNamePrefixes("foo-bar-baz.service"))
+	assert.Empty(t, unitNamePrefixes("ollama.service"))
+	assert.Empty(t, unitNamePrefixes("noext"))
+	// A trailing dash names the prefix unit itself, which is not its own prefix.
+	assert.Equal(t, []string{"foo-.service"}, unitNamePrefixes("foo-bar-.service"))
+}
