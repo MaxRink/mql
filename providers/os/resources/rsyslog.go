@@ -6,6 +6,7 @@ package resources
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -230,6 +231,9 @@ func (s *mqlRsyslogConf) files(path string) ([]any, error) {
 		depth int
 	}
 	var queue []queued
+	// sawInclude records whether any file read so far names an include,
+	// which decides whether `<conf>.d` is auto-discovered below.
+	sawInclude := false
 
 	// drain walks the queue, following includes out of every file it reads.
 	// It runs once for the main config and again for the `.d` fragments, so a
@@ -264,13 +268,24 @@ func (s *mqlRsyslogConf) files(path string) ([]any, error) {
 				if errors.Is(content.Error, resources.NotFoundError{}) {
 					continue
 				}
-				// Other read errors (permission denied, IO) are non-fatal here:
-				// the file is still listed via the resource, and the caller can
-				// inspect it for the error. Don't abort the whole walk.
+				// A file rsyslog reads that the scan may not read (SUSE ships
+				// rsyslog.conf, rsyslog.d/remote.conf and *.frule as 0600) is
+				// a refusal: parsing on without it reported a non-root scan's
+				// remote forwarding and file modes from what was left over.
+				// Before structured errors (ADR 046 §9) the walk went on.
+				if plugin.StructuredErrors() {
+					if errors.Is(content.Error, os.ErrPermission) {
+						return llx.Forbidden(fmt.Errorf("cannot read rsyslog configuration %s: %w", clean, content.Error))
+					}
+					return content.Error
+				}
 				continue
 			}
 
 			patterns := parseRsyslogIncludes(content.Data)
+			if len(patterns) > 0 {
+				sawInclude = true
+			}
 			parentDir := filepath.Dir(clean)
 			for _, pat := range patterns {
 				matches, err := s.expandIncludePattern(parentDir, pat)
@@ -292,16 +307,19 @@ func (s *mqlRsyslogConf) files(path string) ([]any, error) {
 		return nil, err
 	}
 
-	// Legacy `.d` auto-discovery: configurations that rely on the
-	// distribution's default to drop fragments into `<conf>.d/` without
-	// an explicit `$IncludeConfig` should still surface those files.
+	// rsyslog reads exactly the files its includes name. Once the config
+	// names any, they are the whole answer: auto-discovering `<conf>.d` as
+	// well added every file in it, so a 30-site.conf.bak or .rpmsave copy
+	// holding the old settings stood in for the edited 30-site.conf, and
+	// rsyslog.conf.params kept reporting values rsyslog no longer runs with.
+	if sawInclude {
+		return out, nil
+	}
+
+	// Legacy `.d` auto-discovery, for a config that names no include at all:
+	// surface the `*.conf` fragments a distribution drops into `<conf>.d/`.
 	// Skip entries already visited via include traversal so the list
 	// doesn't double-count when both paths reach the same fragment.
-	//
-	// No depth bound here: distro packages drop fragments directly into
-	// `<conf>.d/` (no subdirs in practice), and this matches the original
-	// behaviour of the resource — narrowing it now would silently change
-	// the file list for callers relying on it.
 	confD := path[0:len(path)-5] + ".d"
 	o, err := CreateResource(s.MqlRuntime, "files.find", map[string]*llx.RawData{
 		"from": llx.StringData(confD),
@@ -316,6 +334,9 @@ func (s *mqlRsyslogConf) files(path string) ([]any, error) {
 					continue
 				}
 				if visited[filepath.Clean(mf.Path.Data)] {
+					continue
+				}
+				if !strings.HasSuffix(mf.Path.Data, ".conf") {
 					continue
 				}
 				// Queue rather than append: a fragment dropped into `<conf>.d`

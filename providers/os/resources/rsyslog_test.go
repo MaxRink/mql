@@ -225,6 +225,40 @@ func TestRsyslogConf_DotDFragmentIncludesAreFollowed(t *testing.T) {
 		"the fragment's own $IncludeConfig must be followed")
 	assert.NotContains(t, paths, "/etc/rsyslog.nested/notes.txt",
 		"the include glob still applies to the nested directory")
+	assert.NotContains(t, paths, "/etc/rsyslog.d/50-frag.conf.rpmnew",
+		"auto-discovery reads only *.conf fragments")
+}
+
+// A config that includes its fragments explicitly is read the way rsyslog
+// reads it: the backups and package leftovers in rsyslog.d stay out, and so do
+// their settings. Before, auto-discovery added every file in rsyslog.d on top
+// of the include, and params took FileCreateMode from 30-site.conf.rpmsave.
+func TestRsyslogConf_ExplicitIncludeSkipsAutoDiscovery(t *testing.T) {
+	fixturePath, err := filepath.Abs("testdata/rsyslog_include_backups.toml")
+	require.NoError(t, err)
+	conn, err := mock.New(0, &inventory.Asset{
+		Platform: &inventory.Platform{Name: "redhat", Version: "9.7", Family: []string{"redhat", "linux", "unix", "os"}},
+	}, mock.WithPath(fixturePath))
+	require.NoError(t, err)
+	runtime := &plugin.Runtime{Connection: conn, Resources: &syncx.Map[plugin.Resource]{}}
+
+	raw, err := CreateResource(runtime, "rsyslog.conf", map[string]*llx.RawData{
+		"path": llx.StringData("/etc/rsyslog.conf"),
+	})
+	require.NoError(t, err)
+	conf := raw.(*mqlRsyslogConf)
+
+	files := conf.GetFiles()
+	require.NoError(t, files.Error)
+	paths := []string{}
+	for _, f := range files.Data {
+		paths = append(paths, f.(*mqlFile).Path.Data)
+	}
+	assert.ElementsMatch(t, []string{"/etc/rsyslog.conf", "/etc/rsyslog.d/30-site.conf"}, paths)
+
+	params := conf.GetParams()
+	require.NoError(t, params.Error)
+	assert.Equal(t, "0644", params.Data["FileCreateMode"])
 }
 
 func TestRsyslogConfPath(t *testing.T) {
@@ -813,4 +847,61 @@ func TestRsyslogConf_IncludeOrderAndRulesets(t *testing.T) {
 			"defaultnetstreamdriver": "gtls",
 		}, globals.Data)
 	})
+}
+
+func rsyslogSUSEConf(t *testing.T, denied ...string) (*mqlRsyslogConf, error) {
+	t.Helper()
+	fixturePath, err := filepath.Abs("testdata/rsyslog_suse_modes.toml")
+	require.NoError(t, err)
+	mc, err := mock.New(0, &inventory.Asset{
+		Platform: &inventory.Platform{Name: "sles", Version: "15.7", Family: []string{"suse", "linux", "unix", "os"}},
+	}, mock.WithPath(fixturePath))
+	require.NoError(t, err)
+	d := map[string]bool{}
+	for _, p := range denied {
+		d[p] = true
+	}
+	conn := &fsWrapConn{Connection: mc, fs: &unlistableFs{Fs: mc.FileSystem(), denied: d}}
+	runtime := &plugin.Runtime{Connection: conn, Resources: &syncx.Map[plugin.Resource]{}}
+	raw, err := CreateResource(runtime, "rsyslog.conf", map[string]*llx.RawData{
+		"path": llx.StringData("/etc/rsyslog.conf"),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return raw.(*mqlRsyslogConf), nil
+}
+
+// A non-root scan on SUSE cannot read the 0600 files. With structured errors
+// that is a refusal on files and everything parsed from them; before, the
+// remote forwarding in remote.conf silently disappeared, so
+// `actions.none(target == "192.0.2.97")` passed. Without the flag the v13
+// behaviour (skip and parse what is left) stays.
+func TestRsyslogConf_UnreadableFileIsRefused(t *testing.T) {
+	withStructuredErrors(t, true)
+	all, err := rsyslogSUSEConf(t)
+	require.NoError(t, err)
+	actions := all.GetActions()
+	require.NoError(t, actions.Error)
+	targets := []string{}
+	for _, a := range actions.Data {
+		targets = append(targets, a.(*mqlRsyslogAction).Target.Data)
+	}
+	assert.Contains(t, targets, "192.0.2.97:514")
+
+	// the resource is keyed on its file list, so the refusal surfaces as soon
+	// as rsyslog.conf is built, before any field is read
+	for _, denied := range []string{"/etc/rsyslog.d/remote.conf", "/etc/rsyslog.conf"} {
+		_, err := rsyslogSUSEConf(t, denied)
+		require.Error(t, err, denied)
+		assert.True(t, errors.Is(err, llx.ErrForbidden), denied)
+		assert.Contains(t, err.Error(), denied)
+	}
+
+	withStructuredErrors(t, false)
+	conf, err := rsyslogSUSEConf(t, "/etc/rsyslog.d/remote.conf")
+	require.NoError(t, err)
+	files := conf.GetFiles()
+	require.NoError(t, files.Error)
+	assert.Len(t, files.Data, 4)
 }
