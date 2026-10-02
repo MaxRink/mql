@@ -5,16 +5,18 @@ package resources
 
 import (
 	"errors"
-	"github.com/spf13/afero"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/spf13/afero"
 	"go.mondoo.com/mql/llx"
 	"go.mondoo.com/mql/providers-sdk/v1/plugin"
 	"go.mondoo.com/mql/providers/os/connection/shared"
 	"go.mondoo.com/mql/providers/os/resources/bind9"
+	"go.mondoo.com/mql/providers/os/resources/haproxy"
 	"go.mondoo.com/mql/types"
 )
 
@@ -126,10 +128,68 @@ func bind9ConfPath(conn shared.Connection) string {
 	return bind9ConfCandidates[0]
 }
 
+// bind9PidFile is where named records its pid unless the configuration
+// moves it, on Debian and Red Hat alike.
+const bind9PidFile = "/run/named/named.pid"
+
+// bind9ServiceUnits are the systemd units that start named, in the order to
+// try them: named.service on Red Hat and on Debian 11 and later (where
+// bind9.service is an alias of it), bind9.service on Debian 9 and 10.
+var bind9ServiceUnits = []string{"named.service", "bind9.service"}
+
+// bind9LaunchConfig returns the configuration file named loads when its
+// command line names one with -c, or "" when it reads its compiled-in
+// default. The command line comes from the running named when there is one,
+// otherwise from the systemd service that starts it, with OPTIONS from
+// /etc/default/named, /etc/default/bind9 or /etc/sysconfig/named expanded.
+func bind9LaunchConfig(afs *afero.Afero) string {
+	conf, running := bind9ProcessConfig(afs, bind9PidFile)
+	if !running {
+		if argv := systemdServiceArgv(afs, bind9ServiceUnits...); len(argv) > 0 {
+			conf = bind9.ConfigFromArgs(argv[1:])
+		}
+	}
+	if conf != "" && !filepath.IsAbs(conf) {
+		// named resolves -c against its working directory, which is /
+		// under systemd.
+		conf = filepath.Join("/", conf)
+	}
+	return conf
+}
+
+// bind9ProcessConfig reads the -c argument of the named process recorded in
+// pidFile. running is false when the pid file is missing or stale, or the
+// command line cannot be read.
+func bind9ProcessConfig(afs *afero.Afero, pidFile string) (conf string, running bool) {
+	data, err := afs.ReadFile(pidFile)
+	if err != nil {
+		return "", false
+	}
+	pid := strings.TrimSpace(string(data))
+	if _, err := strconv.Atoi(pid); err != nil {
+		return "", false
+	}
+	raw, err := afs.ReadFile(filepath.Join("/proc", pid, "cmdline"))
+	if err != nil {
+		return "", false
+	}
+	argv := haproxy.SplitProcCmdline(raw)
+	// A stale pid file can point at an unrelated process. RHEL 7 runs
+	// named-pkcs11.
+	if len(argv) == 0 || !strings.HasPrefix(filepath.Base(argv[0]), "named") {
+		return "", false
+	}
+	return bind9.ConfigFromArgs(argv[1:]), true
+}
+
 func (b *mqlBind9) file() (*mqlFile, error) {
 	conn := b.MqlRuntime.Connection.(shared.Connection)
+	path := bind9ConfPath(conn)
+	if launched := bind9LaunchConfig(&afero.Afero{Fs: conn.FileSystem()}); launched != "" {
+		path = launched
+	}
 	f, err := CreateResource(b.MqlRuntime, "file", map[string]*llx.RawData{
-		"path": llx.StringData(bind9ConfPath(conn)),
+		"path": llx.StringData(path),
 	})
 	if err != nil {
 		return nil, err
@@ -604,7 +664,40 @@ var dnssecKeyDirs = []string{
 	"/var/cache/bind",
 	"/etc/named/keys",
 	"/var/named",
+	"/var/lib/named",
 	"/etc/bind",
+}
+
+// bind9DnssecKeyDirs returns the directories the configuration tells named to
+// keep DNSSEC keys in: the key-directory of the options block, of each view
+// and of each zone (a zone's setting overrides its view's, which overrides
+// options), and the working directory, which is where keys go when no
+// key-directory applies. A relative key-directory is relative to the working
+// directory. Duplicates and empty entries are left to the caller.
+func bind9DnssecKeyDirs(stmts []bind9.Statement) []string {
+	var opts []bind9.Statement
+	if o := bind9.First(stmts, "options"); o != nil {
+		opts = o.Block
+	}
+	workDir := strings.Trim(bind9.Value(opts, "directory"), `"`)
+	resolve := func(dir string) string {
+		dir = strings.Trim(dir, `"`)
+		if dir == "" || filepath.IsAbs(dir) || workDir == "" {
+			return dir
+		}
+		return filepath.Join(workDir, dir)
+	}
+
+	dirs := []string{resolve(bind9.Value(opts, "key-directory")), workDir}
+	for _, view := range bind9.Find(stmts, "view") {
+		if view.IsBlock() {
+			dirs = append(dirs, resolve(bind9.Value(view.Block, "key-directory")))
+		}
+	}
+	bind9EachZone(stmts, func(_ string, zone bind9.Statement) {
+		dirs = append(dirs, resolve(bind9.Value(zone.Block, "key-directory")))
+	})
+	return dirs
 }
 
 func (b *mqlBind9) dnssecKeys() ([]any, error) {
@@ -617,18 +710,7 @@ func (b *mqlBind9) dnssecKeys() ([]any, error) {
 
 	// The configuration's own answer wins over the well-known locations: a
 	// server told to keep its keys somewhere is keeping them there.
-	opts, err := b.optionsBlock()
-	if err != nil {
-		return nil, err
-	}
-	var dirs []string
-	if d := bind9.Value(opts, "key-directory"); d != "" {
-		dirs = append(dirs, strings.Trim(d, `"`))
-	}
-	if d := bind9.Value(opts, "directory"); d != "" {
-		dirs = append(dirs, strings.Trim(d, `"`))
-	}
-	dirs = append(dirs, dnssecKeyDirs...)
+	dirs := append(bind9DnssecKeyDirs(b.cfg.Statements), dnssecKeyDirs...)
 
 	seen := map[string]bool{}
 	out := []any{}
