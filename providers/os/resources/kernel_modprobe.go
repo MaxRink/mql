@@ -4,11 +4,8 @@
 package resources
 
 import (
-	"errors"
 	"os"
-	"path"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -153,99 +150,11 @@ func isUsrMerged(fs afero.Fs) bool {
 	return false
 }
 
-// isModprobeConfigName reports whether libkmod reads a directory entry with
-// this name: hidden files are skipped and only `*.conf` files count.
-func isModprobeConfigName(name string) bool {
-	return !strings.HasPrefix(name, ".") && strings.HasSuffix(name, ".conf")
-}
-
-// selectModprobeConfigFiles applies libkmod's file selection to the entries
-// found in each search directory. listings[i] holds the names of the
-// non-directory entries of dirs[i]. The first directory that holds a given
-// name wins, and the winners are returned as full paths ordered by file name
-// (strcmp order), which is the order modprobe applies them in.
-func selectModprobeConfigFiles(dirs []string, listings [][]string) []string {
-	winners := map[string]string{}
-	for i, dir := range dirs {
-		if i >= len(listings) {
-			break
-		}
-		for _, name := range listings[i] {
-			if !isModprobeConfigName(name) {
-				continue
-			}
-			if _, ok := winners[name]; ok {
-				continue
-			}
-			winners[name] = path.Join(dir, name)
-		}
-	}
-
-	names := make([]string, 0, len(winners))
-	for name := range winners {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	res := make([]string, len(names))
-	for i, name := range names {
-		res[i] = winners[name]
-	}
-	return res
-}
-
 // listModprobeConfigFiles returns the modprobe.d configuration files modprobe
-// reads, in the order it applies them. Each search directory is listed one
-// level deep (libkmod ignores subdirectories), symlinked files are followed,
-// and missing directories are skipped. A directory that exists but can't be
-// checked or listed doesn't stop the walk: the files from the other
-// directories are still returned, together with the joined errors.
+// reads, in the order it applies them. See listConfDFiles.
 func listModprobeConfigFiles(runtime *plugin.Runtime) ([]string, error) {
 	conn := runtime.Connection.(shared.Connection)
-	fs := conn.FileSystem()
-
-	dirs := activeModprobeSearchPaths(runtime, fs)
-
-	var errs []error
-	listings := make([][]string, len(dirs))
-	for i, dir := range dirs {
-		raw, err := CreateResource(runtime, "file", map[string]*llx.RawData{
-			"path": llx.StringData(dir),
-		})
-		if err != nil {
-			return nil, err
-		}
-		exists := raw.(*mqlFile).GetExists()
-		if exists.Error != nil {
-			errs = append(errs, exists.Error)
-			continue
-		}
-		if !exists.Data {
-			continue
-		}
-
-		entries, err := afero.ReadDir(fs, dir)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			if entry.Mode()&os.ModeSymlink != 0 {
-				// libkmod stats through the link: a link to a directory is
-				// skipped and a dangling link has nothing to read.
-				target, err := fs.Stat(path.Join(dir, entry.Name()))
-				if err != nil || target.IsDir() {
-					continue
-				}
-			}
-			listings[i] = append(listings[i], entry.Name())
-		}
-	}
-
-	return selectModprobeConfigFiles(dirs, listings), errors.Join(errs...)
+	return listConfDFiles(runtime, activeModprobeSearchPaths(runtime, conn.FileSystem()))
 }
 
 // installBypassBins are the executable paths whose presence as the command
