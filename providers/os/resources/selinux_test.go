@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/spf13/afero"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -103,8 +104,8 @@ apache
 		modules := ParseSemodule(output)
 		require.Len(t, modules, 3)
 
-		require.Equal(t, SELinuxModule{Name: "abrt", Priority: 100, Status: "enabled"}, modules[0])
-		require.Equal(t, SELinuxModule{Name: "custom_policy", Priority: 200, Status: "enabled"}, modules[2])
+		require.Equal(t, SELinuxModule{Name: "abrt", Priority: intPtr(100), Status: "enabled"}, modules[0])
+		require.Equal(t, SELinuxModule{Name: "custom_policy", Priority: intPtr(200), Status: "enabled"}, modules[2])
 	})
 
 	t.Run("full format with status", func(t *testing.T) {
@@ -115,8 +116,8 @@ apache
 		modules := ParseSemodule(output)
 		require.Len(t, modules, 3)
 
-		require.Equal(t, SELinuxModule{Name: "abrt", Priority: 100, Status: "enabled"}, modules[0])
-		require.Equal(t, SELinuxModule{Name: "custom_policy", Priority: 200, Status: "disabled"}, modules[2])
+		require.Equal(t, SELinuxModule{Name: "abrt", Priority: intPtr(100), Status: "enabled"}, modules[0])
+		require.Equal(t, SELinuxModule{Name: "custom_policy", Priority: intPtr(200), Status: "disabled"}, modules[2])
 	})
 
 	t.Run("empty output", func(t *testing.T) {
@@ -157,4 +158,84 @@ func TestReadSelinuxBooleansFromFS(t *testing.T) {
 		bools := readSelinuxBooleansFromFS(fs)
 		require.Nil(t, bools)
 	})
+}
+
+func intPtr(i int) *int { return &i }
+
+// Output captured from `semodule --list-modules=full` and `semodule -l` on
+// RHEL 9 (policycoreutils 3.6) and RHEL 7 (2.5), with a module installed at
+// priority 400 and zosremote disabled.
+func TestParseSemoduleListings(t *testing.T) {
+	t.Run("full listing on RHEL 9", func(t *testing.T) {
+		output := "400 permissive_rhcd_t cil         \n" +
+			"400 sweeppol          pp          \n" +
+			"200 container         pp          \n" +
+			"100 abrt              pp          \n" +
+			"100 zosremote         pp  disabled\n"
+		modules := ParseSemodule(output)
+		require.Len(t, modules, 5)
+		assert.Equal(t, SELinuxModule{Name: "sweeppol", Priority: intPtr(400), Status: "enabled"}, modules[1])
+		assert.Equal(t, SELinuxModule{Name: "abrt", Priority: intPtr(100), Status: "enabled"}, modules[3])
+		assert.Equal(t, SELinuxModule{Name: "zosremote", Priority: intPtr(100), Status: "disabled"}, modules[4])
+	})
+
+	t.Run("full listing on RHEL 7", func(t *testing.T) {
+		output := "400 sweeppol          pp         \n" +
+			"100 abrt              pp         \n" +
+			"100 zosremote         pp disabled\n"
+		modules := ParseSemodule(output)
+		require.Len(t, modules, 3)
+		assert.Equal(t, SELinuxModule{Name: "sweeppol", Priority: intPtr(400), Status: "enabled"}, modules[0])
+		assert.Equal(t, SELinuxModule{Name: "zosremote", Priority: intPtr(100), Status: "disabled"}, modules[2])
+	})
+
+	t.Run("RHEL 7 semodule -l prints versions, not a status", func(t *testing.T) {
+		modules := ParseSemodule("abrt\t1.4.1\nsweeppol\t1.0\n")
+		require.Len(t, modules, 2)
+		assert.Equal(t, SELinuxModule{Name: "abrt", Status: "enabled"}, modules[0])
+		assert.Nil(t, modules[1].Priority)
+	})
+
+	t.Run("old semodule -l marks disabled modules", func(t *testing.T) {
+		modules := ParseSemodule("zosremote\t1.2.0\tDisabled\n")
+		require.Len(t, modules, 1)
+		assert.Equal(t, "disabled", modules[0].Status)
+	})
+}
+
+// /sys/fs/selinux/booleans/<name> holds the current and the pending value, as
+// read on RHEL 7, RHEL 9 and Fedora 44.
+func TestSelinuxBooleanFileValue(t *testing.T) {
+	assert.True(t, selinuxBooleanFileValue([]byte("1 1")))
+	assert.False(t, selinuxBooleanFileValue([]byte("0 0")))
+	// a pending change is not in effect yet
+	assert.False(t, selinuxBooleanFileValue([]byte("0 1")))
+	assert.True(t, selinuxBooleanFileValue([]byte("1 0")))
+	assert.True(t, selinuxBooleanFileValue([]byte("1\n")))
+}
+
+// Debian 9 to 13 with the SELinux packages installed and SELINUX=permissive
+// configured, booted without SELinux: /sys/fs/selinux does not exist and a
+// non-root PATH has no getenforce. The kernel enforces nothing.
+func TestSelinuxRuntimeMode(t *testing.T) {
+	mode, err := selinuxRuntimeMode(false, nil, "permissive")
+	require.NoError(t, err)
+	assert.Equal(t, "disabled", mode)
+
+	// no SELinux on the host at all
+	mode, err = selinuxRuntimeMode(false, nil, "")
+	require.NoError(t, err)
+	assert.Equal(t, "", mode)
+
+	// RHEL with SELinux enabled: the enforce file wins over the config
+	mode, err = selinuxRuntimeMode(true, []byte("1"), "permissive")
+	require.NoError(t, err)
+	assert.Equal(t, "enforcing", mode)
+
+	mode, err = selinuxRuntimeMode(true, []byte("0\n"), "enforcing")
+	require.NoError(t, err)
+	assert.Equal(t, "permissive", mode)
+
+	_, err = selinuxRuntimeMode(true, []byte(""), "enforcing")
+	assert.Error(t, err)
 }
