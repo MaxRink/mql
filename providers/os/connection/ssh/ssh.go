@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	awsconf "github.com/aws/aws-sdk-go-v2/config"
@@ -57,8 +58,12 @@ type Connection struct {
 	SSHClient        *ssh.Client
 
 	// the shell the server runs commands in, detected once (windows_shell.go)
-	shellOnce sync.Once
-	shell     remoteShell
+	shellOnce     sync.Once
+	shell         remoteShell
+	shellDetected atomic.Bool
+	// slots limits the commands that run at once on Windows (command_slots.go)
+	slotsOnce sync.Once
+	slots     chan struct{}
 	// rawRunner replaces runRawCommand in tests
 	rawRunner func(command string) (*shared.Command, error)
 }
@@ -153,11 +158,20 @@ func (p *Connection) Capabilities() shared.Capabilities {
 }
 
 func (c *Connection) RunCommand(command string) (*shared.Command, error) {
-	if c.Sudo != nil && c.Sudo.Active {
+	sudo := c.Sudo != nil && c.Sudo.Active
+	if sudo {
 		command = shared.BuildSudoCommand(c.Sudo, command)
-	} else if res, ok, err := c.runPowershellDirect(command); ok {
-		powershell.DecodeStderr(res)
-		return res, err
+	}
+	// Every path takes a slot. A sudo command does not start with
+	// powershell, so it never probes the shell; it is limited once another
+	// command has found the target to be Windows.
+	release := c.acquireCommandSlot(command)
+	defer release()
+	if !sudo {
+		if res, ok, err := c.runPowershellDirect(command); ok {
+			powershell.DecodeStderr(res)
+			return res, err
+		}
 	}
 	res, err := c.runRaw(command)
 	powershell.DecodeStderr(res)

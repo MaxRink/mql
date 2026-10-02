@@ -50,6 +50,11 @@ func (s remoteShell) String() string {
 	}
 }
 
+// isWindows reports whether the shell only exists on Windows.
+func (s remoteShell) isWindows() bool {
+	return s == shellCmd || s == shellWindowsPowerShell
+}
+
 // shellProbe tells the shells apart in one command, without a double quote
 // that the Windows command line around it would end on:
 //
@@ -98,6 +103,7 @@ func (c *Connection) remoteShell() remoteShell {
 			stdout, _ = io.ReadAll(res.Stdout)
 		}
 		c.shell = parseShellProbe(string(stdout))
+		c.shellDetected.Store(true)
 		log.Debug().Str("shell", c.shell.String()).Msg("ssh> detected the remote shell")
 	})
 	return c.shell
