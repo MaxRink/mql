@@ -105,27 +105,124 @@ func TestPrivatekeyPublicKeyIntrospection(t *testing.T) {
 	}
 }
 
-func TestPrivatekeyEncryptedKeyGraceful(t *testing.T) {
-	// An encrypted (passphrase-protected) key cannot be introspected without
-	// the passphrase and must yield empty/zero values without erroring.
+func TestPrivatekeyEncryptedLegacyPEM(t *testing.T) {
+	// Legacy PEM encryption (`Proc-Type: 4,ENCRYPTED`) hides the key size but
+	// the block type still names the algorithm. The size is null, not 0.
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
-	der, err := x509.MarshalPKCS8PrivateKey(rsaKey)
-	require.NoError(t, err)
+	der := x509.MarshalPKCS1PrivateKey(rsaKey)
 	//nolint:staticcheck // x509.EncryptPEMBlock is deprecated but still the
 	// simplest way to produce an encrypted PEM fixture for this test.
 	encBlock, err := x509.EncryptPEMBlock(rand.Reader, "RSA PRIVATE KEY", der, []byte("secret"), x509.PEMCipherAES256)
 	require.NoError(t, err)
+	data := pem.EncodeToMemory(encBlock)
 
-	pk := newPrivatekey(string(pem.EncodeToMemory(encBlock)))
+	require.True(t, keyEncrypted(data))
+
+	pk := newPrivatekey(string(data))
+	algo, err := pk.publicKeyAlgorithm()
+	require.NoError(t, err)
+	require.Equal(t, "RSA", algo)
+
+	_, err = pk.publicKeyBits()
+	require.NoError(t, err)
+	require.True(t, pk.PublicKeyBits.IsNull())
+}
+
+func TestPrivatekeyEncryptedOpenSSH(t *testing.T) {
+	// `ssh-keygen -N <passphrase>` writes an OpenSSH-format key whose PEM text
+	// has no ENCRYPTED marker; the cipher name is inside the base64 body and
+	// the public key is stored unencrypted next to it.
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 3072)
+	require.NoError(t, err)
+	_, edKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	ecKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		key      any
+		wantAlgo string
+		wantBits int64
+	}{
+		{"Ed25519", edKey, "Ed25519", 256},
+		{"RSA-3072", rsaKey, "RSA", 3072},
+		{"ECDSA P-384", ecKey, "ECDSA", 384},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			block, err := ssh.MarshalPrivateKeyWithPassphrase(tc.key, "", []byte("secret"))
+			require.NoError(t, err)
+			data := pem.EncodeToMemory(block)
+			require.NotContains(t, string(data), "ENCRYPTED")
+
+			require.True(t, keyEncrypted(data))
+
+			pk := newPrivatekey(string(data))
+			algo, err := pk.publicKeyAlgorithm()
+			require.NoError(t, err)
+			require.Equal(t, tc.wantAlgo, algo)
+
+			bits, err := pk.publicKeyBits()
+			require.NoError(t, err)
+			require.Equal(t, tc.wantBits, bits)
+		})
+	}
+}
+
+func TestPrivatekeyEncryptedPKCS8(t *testing.T) {
+	// `openssl pkcs8 -topk8 -v2 aes256` writes an ENCRYPTED PRIVATE KEY block,
+	// which x/crypto/ssh rejects as an unsupported key type. The body is
+	// opaque to the parser, so random bytes stand in for the ciphertext.
+	body := make([]byte, 128)
+	_, err := rand.Read(body)
+	require.NoError(t, err)
+	data := pem.EncodeToMemory(&pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: body})
+
+	require.True(t, keyEncrypted(data))
+
+	pk := newPrivatekey(string(data))
+	_, err = pk.publicKeyAlgorithm()
+	require.NoError(t, err)
+	require.True(t, pk.PublicKeyAlgorithm.IsNull())
+
+	_, err = pk.publicKeyBits()
+	require.NoError(t, err)
+	require.True(t, pk.PublicKeyBits.IsNull())
+}
+
+func TestPrivatekeyUnencryptedNotReportedEncrypted(t *testing.T) {
+	_, edKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	require.False(t, keyEncrypted([]byte(opensshPEM(t, edKey))))
+	require.False(t, keyEncrypted([]byte(pkcs8PEM(t, rsaKey))))
+	require.False(t, keyEncrypted([]byte("not a valid pem")))
+}
+
+// keyEncrypted mirrors how user.sshkeys derives the encrypted field.
+func keyEncrypted(data []byte) bool {
+	info, err := inspectPrivateKey(data)
+	return err == nil && info.Encrypted
+}
+
+func TestPrivatekeySeededParseIsNotRepeated(t *testing.T) {
+	// user.sshkeys inspects each key once and seeds the result; the accessors
+	// must use it rather than parse the PEM again. The PEM here is garbage, so
+	// a second parse would return an error instead of the seeded values.
+	pk := newPrivatekey("not a valid pem")
+	pk.seedParsedKey(privateKeyInfo{Encrypted: true, Algorithm: "Ed25519", Bits: 256}, nil)
 
 	algo, err := pk.publicKeyAlgorithm()
 	require.NoError(t, err)
-	require.Equal(t, "", algo)
+	require.Equal(t, "Ed25519", algo)
 
 	bits, err := pk.publicKeyBits()
 	require.NoError(t, err)
-	require.Equal(t, int64(0), bits)
+	require.Equal(t, int64(256), bits)
 }
 
 func TestPrivatekeyGarbagePEM(t *testing.T) {
