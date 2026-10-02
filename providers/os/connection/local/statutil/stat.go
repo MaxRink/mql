@@ -173,7 +173,7 @@ func (s *statHelper) linux(name string) (os.FileInfo, error) {
 	}
 
 	return &shared.FileInfo{
-		FName:    filepath.Base(path),
+		FName:    filepath.Base(name),
 		FSize:    int64(size),
 		FMode:    mapMode,
 		FIsDir:   mapMode.IsDir(),
@@ -237,7 +237,7 @@ func (s *statHelper) unix(name string) (os.FileInfo, error) {
 	}
 
 	return &shared.FileInfo{
-		FName:    filepath.Base(path),
+		FName:    filepath.Base(name),
 		FSize:    int64(size),
 		FMode:    mode,
 		FIsDir:   mode.IsDir(),
@@ -322,7 +322,7 @@ func (s *statHelper) aix(name string) (os.FileInfo, error) {
 	}
 
 	return &shared.FileInfo{
-		FName:    filepath.Base(path),
+		FName:    filepath.Base(name),
 		FSize:    int64(size),
 		FMode:    mode,
 		FIsDir:   mode.IsDir(),
