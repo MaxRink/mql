@@ -7,9 +7,11 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +22,7 @@ import (
 	"go.mondoo.com/mql/providers-sdk/v1/util/convert"
 	"go.mondoo.com/mql/providers/os/connection/shared"
 	"go.mondoo.com/mql/providers/os/resources/apache2"
+	"go.mondoo.com/mql/providers/os/resources/haproxy"
 	"go.mondoo.com/mql/types"
 )
 
@@ -221,6 +224,45 @@ func apacheLayoutFromCommand(conn shared.Connection) apacheLayout {
 	return apacheLayout{}
 }
 
+// apacheDebianStaticModules are the modules Debian and Ubuntu compile into
+// apache2, as `apache2 -l` prints them on Ubuntu 16.04 through 26.04 (26.04
+// adds mod_systemd.c). They are used when the binary cannot be asked.
+var apacheDebianStaticModules = []string{
+	"core.c", "mod_so.c", "mod_watchdog.c", "http_core.c",
+	"mod_log_config.c", "mod_logio.c", "mod_version.c", "mod_unixd.c",
+}
+
+// apacheMinimalStaticModules are compiled into every httpd build that can
+// load modules at all.
+var apacheMinimalStaticModules = []string{"core.c", "mod_so.c", "http_core.c"}
+
+// apacheStaticModules returns the modules compiled into the installed httpd,
+// which satisfy <IfModule> without a LoadModule line. `httpd -l` needs no
+// configuration and no privileges; when no binary can be run (an image or
+// filesystem scan) it falls back to the platform's known set.
+func apacheStaticModules(conn shared.Connection, afs *afero.Afero) []string {
+	for _, bin := range apacheBinaries {
+		if ok, _ := afs.Exists(bin); !ok {
+			continue
+		}
+		cmd, err := conn.RunCommand(bin + " -l")
+		if err != nil || cmd.ExitStatus != 0 {
+			continue
+		}
+		data, err := io.ReadAll(cmd.Stdout)
+		if err != nil {
+			continue
+		}
+		if mods := apache2.ParseStaticModuleList(string(data)); len(mods) > 0 {
+			return mods
+		}
+	}
+	if apacheEnvvarsPath(conn) != "" {
+		return apacheDebianStaticModules
+	}
+	return apacheMinimalStaticModules
+}
+
 // apacheDiscoverLayout finds where the installed server keeps its
 // configuration, preferring the binary over running anything.
 func apacheDiscoverLayout(conn shared.Connection, afs *afero.Afero) apacheLayout {
@@ -310,6 +352,13 @@ type mqlApache2ConfInternal struct {
 	// locating the config file. It is only consulted when the config does not
 	// state a ServerRoot, and is written once by file() before any parsing.
 	binaryServerRoot string
+	// defaultFile is set when file() chose the configuration file, rather
+	// than apache2.conf(path) naming it.
+	defaultFile bool
+	// launch is how httpd is started (see apacheLaunch), read once.
+	launchOnce sync.Once
+	launch     *apache2.Launch
+	launchErr  error
 }
 
 // apacheConfByFamily maps platform families (and a few standalone platform
@@ -463,6 +512,26 @@ func (s *mqlApache2Conf) id() (string, error) {
 // directly, bypassing this method entirely (same pattern as sshd.config).
 func (s *mqlApache2Conf) file() (*mqlFile, error) {
 	conn := s.MqlRuntime.Connection.(shared.Connection)
+	s.defaultFile = true
+
+	// A configuration file named on httpd's command line (-f) is the one it
+	// loads.
+	launch, err := s.launchArgs()
+	if err != nil {
+		return nil, err
+	}
+	if launch != nil && launch.ConfigFile != "" {
+		path := apacheLaunchConfigFile(conn, launch)
+		if ok, _ := (&afero.Afero{Fs: conn.FileSystem()}).Exists(path); ok {
+			f, err := CreateResource(s.MqlRuntime, "file", map[string]*llx.RawData{
+				"path": llx.StringData(path),
+			})
+			if err != nil {
+				return nil, err
+			}
+			return f.(*mqlFile), nil
+		}
+	}
 
 	// Try the platform-preferred path first, then fall back to all known paths.
 	preferred := apacheConfPath(conn)
@@ -532,6 +601,9 @@ func (s *mqlApache2Conf) expandGlob(pattern string) ([]string, error) {
 		}
 		pattern = filepath.Join(serverRoot, pattern)
 	}
+
+	// SUSE's start_apache2 passes "Include /etc/apache2/sysconfig.d//global.conf"
+	pattern = filepath.Clean(pattern)
 
 	if !reApacheGlob.MatchString(pattern) {
 		return []string{pattern}, nil
@@ -651,7 +723,55 @@ func (s *mqlApache2Conf) parse(file *mqlFile) error {
 	// directives like `User ${APACHE_RUN_USER}` are resolved.
 	envvars := s.loadEnvvars(fileContent)
 
-	cfg, err := apache2.ParseWithGlob(file.Path.Data, fileContent, globExpand, envvars)
+	// <IfModule> and <IfDefine> are evaluated against the modules compiled
+	// into the binary plus those loaded by LoadModule, and against -D
+	// parameters (Debian passes APACHE_ARGUMENTS from envvars) plus Define.
+	conn := s.MqlRuntime.Connection.(shared.Connection)
+	afs := &afero.Afero{Fs: conn.FileSystem()}
+	defines := apache2.DefinesFromArguments(envvars["APACHE_ARGUMENTS"])
+
+	// Without an envvars file, httpd gets its environment and -D parameters
+	// from its systemd unit; RHEL 7's reads /etc/sysconfig/httpd
+	var unitErr error
+	if apacheEnvvarsPath(conn) == "" {
+		var unitEnv map[string]string
+		var unitDefines []string
+		unitEnv, unitDefines, unitErr = apacheUnitEnvironment(afs)
+		if len(unitEnv) > 0 {
+			envvars = unitEnv
+		}
+		defines = append(defines, unitDefines...)
+	}
+
+	// httpd's own command line: the running master's, or on SUSE the one
+	// start_apache2 builds from /etc/sysconfig/apache2. It applies to the
+	// file httpd loads, not to another file named with apache2.conf(path).
+	var preDirectives, postDirectives []string
+	launch, launchErr := s.launchArgs()
+	if launch != nil && (s.defaultFile || (launch.ConfigFile != "" && apacheLaunchConfigFile(conn, launch) == file.Path.Data)) {
+		defines = append(defines, launch.Defines...)
+		preDirectives = launch.PreDirectives
+		postDirectives = launch.PostDirectives
+		if launch.ServerRoot != "" {
+			s.binaryServerRoot = launch.ServerRoot
+		}
+	}
+
+	opts := apache2.ParseOptions{
+		StaticModules:  apacheStaticModules(conn, afs),
+		Defines:        defines,
+		PreDirectives:  preDirectives,
+		PostDirectives: postDirectives,
+	}
+
+	var cfg *apache2.Config
+	err := unitErr
+	if err == nil {
+		err = launchErr
+	}
+	if err == nil {
+		cfg, err = apache2.ParseWithGlobOptions(file.Path.Data, fileContent, globExpand, envvars, opts)
+	}
 
 	if err != nil {
 		errState := plugin.TValue[map[string]any]{Error: err, State: plugin.StateIsSet | plugin.StateIsNull}
@@ -802,6 +922,234 @@ func (s *mqlApache2Conf) loadEnvvars(fileContent func(string) (string, error)) m
 		return nil
 	}
 	return apache2.ParseEnvvars(content)
+}
+
+// apachePidFiles are where httpd records its master's pid: SUSE's
+// start_apache2 passes -C "PidFile /run/httpd.pid", Red Hat's httpd.conf
+// sets /run/httpd/httpd.pid and Debian's envvars /run/apache2/apache2.pid.
+var apachePidFiles = []string{"/run/httpd.pid", "/run/httpd/httpd.pid", "/run/apache2/apache2.pid"}
+
+const (
+	// apacheSUSEStartScript is the wrapper SUSE's apache2.service runs. It
+	// builds httpd's command line from apacheSUSESysconfig.
+	apacheSUSEStartScript = "/usr/sbin/start_apache2"
+	apacheSUSESysconfig   = "/etc/sysconfig/apache2"
+)
+
+// launchArgs returns how httpd is started, read once per resource.
+func (s *mqlApache2Conf) launchArgs() (*apache2.Launch, error) {
+	s.launchOnce.Do(func() {
+		conn := s.MqlRuntime.Connection.(shared.Connection)
+		s.launch, s.launchErr = apacheLaunch(&afero.Afero{Fs: conn.FileSystem()})
+	})
+	return s.launch, s.launchErr
+}
+
+// apacheLaunch returns the command line httpd runs with: the running
+// master's, found through its pid file, or when no httpd runs on SUSE the one
+// start_apache2 builds from /etc/sysconfig/apache2. It returns nil when
+// neither applies, and httpd then reads its configuration file as is.
+func apacheLaunch(afs *afero.Afero) (*apache2.Launch, error) {
+	if l := apacheRunningLaunch(afs); l != nil {
+		return l, nil
+	}
+	return apacheSUSELaunch(afs)
+}
+
+// apacheRunningLaunch reads the command line of the httpd master recorded in
+// a pid file. A missing or stale pid file gives nil.
+func apacheRunningLaunch(afs *afero.Afero) *apache2.Launch {
+	for _, pidFile := range apachePidFiles {
+		data, err := afs.ReadFile(pidFile)
+		if err != nil {
+			continue
+		}
+		pid := strings.TrimSpace(string(data))
+		if _, err := strconv.Atoi(pid); err != nil {
+			continue
+		}
+		raw, err := afs.ReadFile(filepath.Join("/proc", pid, "cmdline"))
+		if err != nil {
+			continue
+		}
+		argv := haproxy.SplitProcCmdline(raw)
+		if len(argv) == 0 {
+			continue
+		}
+		// SUSE runs httpd-prefork (or -worker, -event), Debian apache2
+		base := filepath.Base(argv[0])
+		if !strings.HasPrefix(base, "httpd") && !strings.HasPrefix(base, "apache2") {
+			continue
+		}
+		l := apache2.ParseLaunchArgs(argv[1:])
+		return &l
+	}
+	return nil
+}
+
+// apacheSUSELaunch returns the command line SUSE's start_apache2 runs httpd
+// with, built from /etc/sysconfig/apache2, or nil on any other layout.
+func apacheSUSELaunch(afs *afero.Afero) (*apache2.Launch, error) {
+	if ok, _ := afs.Exists(apacheSUSEStartScript); !ok {
+		return nil, nil
+	}
+	data, err := afs.ReadFile(apacheSUSESysconfig)
+	if errors.Is(err, fs.ErrNotExist) {
+		// start_apache2 then leaves out -DSYSCONFIG, and httpd.conf loads
+		// the static loadmodule.conf and global.conf itself
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	vars := apache2.ParseEnvironmentFile(string(data))
+	mpm := vars["APACHE_MPM"]
+	if mpm == "" {
+		mpm = apacheSUSEMPM(afs)
+	}
+	var unitArgs []string
+	if argv := systemdServiceArgv(afs, "apache2.service"); len(argv) > 1 {
+		unitArgs = argv[1:]
+	}
+	l := apache2.SUSESysconfig{
+		Vars:     vars,
+		MPM:      mpm,
+		UnitArgs: unitArgs,
+		Exists: func(p string) bool {
+			ok, _ := afs.Exists(p)
+			return ok
+		},
+	}.Launch()
+	return &l, nil
+}
+
+// apacheSUSEMPMs are the httpd binaries SUSE ships, one per MPM.
+var apacheSUSEMPMs = []string{"prefork", "worker", "event"}
+
+// apacheSUSEMPM returns the MPM start_apache2 picks when APACHE_MPM is unset:
+// the target of the /usr/sbin/httpd alternative (/usr/sbin/httpd-prefork).
+// When the link cannot be read, a single installed httpd-<mpm> binary is the
+// answer; otherwise it is unknown.
+func apacheSUSEMPM(afs *afero.Afero) string {
+	if lr, ok := afs.Fs.(afero.LinkReader); ok {
+		target := "/usr/sbin/httpd"
+		for range 2 {
+			next, err := lr.ReadlinkIfPossible(target)
+			if err != nil {
+				break
+			}
+			if !filepath.IsAbs(next) {
+				next = filepath.Join(filepath.Dir(target), next)
+			}
+			target = next
+		}
+		if mpm, ok := strings.CutPrefix(target, "/usr/sbin/httpd-"); ok {
+			return mpm
+		}
+	}
+	found := ""
+	for _, mpm := range apacheSUSEMPMs {
+		if ok, _ := afs.Exists("/usr/sbin/httpd-" + mpm); ok {
+			if found != "" {
+				return ""
+			}
+			found = mpm
+		}
+	}
+	return found
+}
+
+// apacheLaunchConfigFile resolves the -f argument: a relative path is
+// relative to the -d ServerRoot, or the platform's.
+func apacheLaunchConfigFile(conn shared.Connection, launch *apache2.Launch) string {
+	if launch.ConfigFile == "" || filepath.IsAbs(launch.ConfigFile) {
+		return launch.ConfigFile
+	}
+	root := launch.ServerRoot
+	if root == "" {
+		root = apacheServerRoot(conn)
+	}
+	return filepath.Join(root, launch.ConfigFile)
+}
+
+// apacheServiceUnitDirs are where systemd looks for the httpd service unit
+// and its httpd.service.d drop-ins, highest priority first.
+var apacheServiceUnitDirs = []string{
+	"/etc/systemd/system",
+	"/run/systemd/system",
+	"/usr/lib/systemd/system",
+	"/lib/systemd/system",
+}
+
+// apacheUnitEnvironment returns the environment systemd starts httpd with
+// (Environment= plus the EnvironmentFile= files, which take precedence) and
+// the -D parameters of its ExecStart line. Apache resolves ${VAR} from that
+// environment. A missing unit or file contributes nothing; one that can't be
+// read is an error. These files are not Apache configuration, so they are
+// read directly rather than listed in files.
+func apacheUnitEnvironment(afs *afero.Afero) (map[string]string, []string, error) {
+	var contents []string
+	for _, dir := range apacheServiceUnitDirs {
+		content, err := afs.ReadFile(dir + "/httpd.service")
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		contents = append(contents, string(content))
+		break
+	}
+	if len(contents) == 0 {
+		return nil, nil, nil
+	}
+
+	// drop-ins apply in file-name order; a name in a higher-priority
+	// directory hides the same name further down
+	dropIns := map[string]string{}
+	for i := len(apacheServiceUnitDirs) - 1; i >= 0; i-- {
+		dir := apacheServiceUnitDirs[i] + "/httpd.service.d"
+		entries, err := afs.ReadDir(dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".conf") {
+				dropIns[e.Name()] = dir + "/" + e.Name()
+			}
+		}
+	}
+	names := make([]string, 0, len(dropIns))
+	for name := range dropIns {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		content, err := afs.ReadFile(dropIns[name])
+		if err != nil {
+			return nil, nil, err
+		}
+		contents = append(contents, string(content))
+	}
+
+	unit := apache2.ParseServiceUnit(contents...)
+	env := unit.Environment
+	for _, f := range unit.EnvironmentFiles {
+		data, err := afs.ReadFile(f)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		for k, v := range apache2.ParseEnvironmentFile(string(data)) {
+			env[k] = v
+		}
+	}
+	return env, apache2.UnitDefines(unit.ExecStart, env), nil
 }
 
 // envvars returns the apache2.conf.envvars resource representing the parsed
