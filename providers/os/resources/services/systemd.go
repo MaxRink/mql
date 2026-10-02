@@ -131,6 +131,68 @@ func applySystemdUnitFileState(service *Service, unitFileState string) {
 	service.Enabled = unitFileState == "enabled" || unitFileState == "enabled-runtime"
 	service.Masked = strings.HasPrefix(unitFileState, "masked")
 	service.Static = unitFileState == "static"
+	service.needsIsEnabled = unitFileState == "bad" || unitFileState == "generated"
+}
+
+// resolveWithIsEnabled asks `systemctl is-enabled` about each service whose
+// unit-file state systemctl reported as "bad" or "generated". Neither says
+// whether the service starts at boot. systemd 219 (RHEL 7) reports every SysV
+// init script as "bad", and Debian's systemd (232 to 257) reports one as
+// "generated" (systemd-sysv-generator wrote its unit), so a service enabled
+// with chkconfig or update-rc.d read enabled=false. is-enabled hands a SysV
+// service to chkconfig or systemd-sysv-install, which answer from the runlevel
+// links. A unit is asked on its own because systemd 219 prints the SysV answers
+// before the native ones, out of argument order. Where is-enabled has no
+// better answer (a unit from another generator prints "generated" again), the
+// state stays as systemctl reported it.
+func (s *SystemDServiceManager) resolveWithIsEnabled(services []*Service) {
+	for _, service := range services {
+		if !service.needsIsEnabled {
+			continue
+		}
+		service.needsIsEnabled = false
+
+		unit := ensureSystemdServiceUnit(service.Name)
+		cmd, err := s.conn.RunCommand(buildSystemdIsEnabledCommand(unit))
+		if err != nil {
+			log.Debug().Err(err).Str("unit", unit).Msg("mql[services]> could not run systemctl is-enabled")
+			continue
+		}
+		// is-enabled exits non-zero for a disabled unit, so the exit status
+		// does not tell an answer from a failure; the printed state does
+		state := parseSystemdIsEnabled(cmd.Stdout)
+		if state == "" || state == "bad" || state == "generated" {
+			continue
+		}
+		applySystemdUnitFileState(service, state)
+	}
+}
+
+func buildSystemdIsEnabledCommand(unit string) string {
+	return "systemctl is-enabled -- " + shared.ShellEscape(unit)
+}
+
+// systemdIsEnabledStates are the answers `systemctl is-enabled` prints.
+var systemdIsEnabledStates = map[string]struct{}{
+	"enabled": {}, "enabled-runtime": {}, "linked": {}, "linked-runtime": {},
+	"alias": {}, "masked": {}, "masked-runtime": {}, "static": {}, "indirect": {},
+	"disabled": {}, "generated": {}, "transient": {}, "bad": {},
+}
+
+// parseSystemdIsEnabled returns the state `systemctl is-enabled` printed for a
+// single unit, or "" when it printed none. The SysV redirect notice goes to
+// stderr, so the state is the last line on stdout.
+func parseSystemdIsEnabled(input io.Reader) string {
+	content, err := io.ReadAll(input)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+	state := strings.TrimSpace(lines[len(lines)-1])
+	if _, ok := systemdIsEnabledStates[state]; !ok {
+		return ""
+	}
+	return state
 }
 
 func normalizeSystemdServiceName(unit string) string {
@@ -237,7 +299,16 @@ func (s *SystemDServiceManager) showUnits(units []string) (map[string]*Service, 
 		return nil, err
 	}
 
-	return ParseServiceSystemDShow(cmd.Stdout)
+	services, err := ParseServiceSystemDShow(cmd.Stdout)
+	if err != nil {
+		return nil, err
+	}
+	shown := make([]*Service, 0, len(services))
+	for _, service := range services {
+		shown = append(shown, service)
+	}
+	s.resolveWithIsEnabled(shown)
+	return services, nil
 }
 
 func (s *SystemDServiceManager) Get(name string) (*Service, error) {
@@ -318,7 +389,9 @@ func (s *SystemDServiceManager) List() ([]*Service, error) {
 	// list-units -- list-unit-files carries the template (getty@) instead --
 	// so without this the running instance is invisible and the template
 	// reads running=false while an instance of it is up.
-	return append(services, s.instanceUnits(unitStates, known)...), nil
+	services = append(services, s.instanceUnits(unitStates, known)...)
+	s.resolveWithIsEnabled(services)
+	return services, nil
 }
 
 // instanceUnits builds services for loaded units that list-unit-files did not
