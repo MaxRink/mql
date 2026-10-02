@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"path"
+	"strings"
 
 	"github.com/spf13/afero"
 	"go.mondoo.com/mql/llx"
@@ -117,13 +118,38 @@ func (c *mqlCassandra) id() (string, error) {
 	return "cassandra", nil
 }
 
+// cassandraPackageBinaries lists where the Debian, Ubuntu and RPM packages
+// install the launch script. Debian and RPM put it in /usr/sbin, which is not
+// on a non-root user's PATH, so `cassandra -v` alone finds nothing there.
+var cassandraPackageBinaries = []string{
+	"/usr/sbin/cassandra",
+	"/usr/bin/cassandra",
+}
+
+// cassandraBinaries returns the launch scripts to try after the one on PATH:
+// the package locations, then the script of each tarball install among
+// confDirs. A tarball unpacks into one directory that holds conf/ and bin/
+// side by side and puts nothing on PATH. Package installs keep their
+// configuration under /etc, which has no sibling bin directory.
+func cassandraBinaries(confDirs []string) []string {
+	out := append([]string{}, cassandraPackageBinaries...)
+	for _, dir := range confDirs {
+		if path.Base(dir) != "conf" || strings.HasPrefix(dir, "/etc/") {
+			continue
+		}
+		out = append(out, path.Join(path.Dir(dir), "bin", "cassandra"))
+	}
+	return out
+}
+
 // version reads the server version from the installed binary.
 //
 // The launch script prints the version at runtime rather than storing it in
 // the binary, so this needs command execution and reports nothing over a
 // transport that cannot run commands. The configuration files the other
 // cassandra resources read are unaffected, since they come off the
-// filesystem.
+// filesystem. The script on PATH is tried first, then the package
+// locations and the bin directory of each tarball install that exist.
 func (c *mqlCassandra) version() (string, error) {
 	conn, ok := c.MqlRuntime.Connection.(shared.Connection)
 	if !ok {
@@ -131,23 +157,35 @@ func (c *mqlCassandra) version() (string, error) {
 		return "", nil
 	}
 
-	res, err := conn.RunCommand("cassandra -v")
+	if version := cassandraVersionFrom(conn, "cassandra"); version != "" {
+		return version, nil
+	}
+	afs := &afero.Afero{Fs: conn.FileSystem()}
+	for _, bin := range cassandraBinaries(cassandraConfDirs) {
+		if ok, _ := afs.Exists(bin); !ok {
+			continue
+		}
+		if version := cassandraVersionFrom(conn, bin); version != "" {
+			return version, nil
+		}
+	}
+
+	c.Version.State = plugin.StateIsSet | plugin.StateIsNull
+	return "", nil
+}
+
+// cassandraVersionFrom runs `<bin> -v` and returns the version it prints, or
+// the empty string when the command fails or prints none.
+func cassandraVersionFrom(conn shared.Connection, bin string) string {
+	res, err := conn.RunCommand(bin + " -v")
 	if err != nil || res.ExitStatus != 0 {
-		c.Version.State = plugin.StateIsSet | plugin.StateIsNull
-		return "", nil
+		return ""
 	}
 	data, err := io.ReadAll(res.Stdout)
 	if err != nil {
-		c.Version.State = plugin.StateIsSet | plugin.StateIsNull
-		return "", nil
+		return ""
 	}
-
-	version := cassandraconf.ParseVersion(string(data))
-	if version == "" {
-		c.Version.State = plugin.StateIsSet | plugin.StateIsNull
-		return "", nil
-	}
-	return version, nil
+	return cassandraconf.ParseVersion(string(data))
 }
 
 // ---------------------------------------------------------------------------
