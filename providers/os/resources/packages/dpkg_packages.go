@@ -6,6 +6,7 @@ package packages
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -258,8 +259,13 @@ func ParseDpkgUpdates(input io.Reader) (map[string]PackageUpdate, error) {
 		line := scanner.Text()
 		m := DPKG_UPDATE_REGEX.FindStringSubmatch(line)
 		if m != nil {
+			// apt qualifies a foreign-architecture package as "<name>:<arch>"
+			// (`Inst g03-ma:i386 [...]`), while dpkg's status file lists it
+			// under its bare name. The map key keeps apt's spelling so the
+			// native and foreign entries stay apart; Name is the bare name so
+			// packages.list's "<name>/<arch>" join finds it.
 			pkgs[m[1]] = PackageUpdate{
-				Name:      m[1],
+				Name:      stripDebArchQualifier(m[1]),
 				Version:   m[2],
 				Available: m[3],
 				Arch:      m[5],
@@ -272,6 +278,76 @@ func ParseDpkgUpdates(input io.Reader) (map[string]PackageUpdate, error) {
 	}
 
 	return pkgs, nil
+}
+
+// stripDebArchQualifier drops apt's ":<arch>" multi-arch qualifier from a
+// package name. A Debian package name cannot contain a colon, so everything
+// from the first one on is the qualifier.
+func stripDebArchQualifier(name string) string {
+	if i := strings.IndexByte(name, ':'); i > 0 {
+		return name[:i]
+	}
+	return name
+}
+
+// APT_LIST_UPGRADABLE_REGEX splits one line of `apt list --upgradable`:
+//
+//	linux-aws/noble-updates 7.0.0-1014.14~24.04.1 amd64 [upgradable from: 7.0.0-1013.13~24.04.1]
+//	g03-ma/unknown 1.1-1 i386 [upgradable from: 1.0-1]
+//	libaudit-common/noble-updates,noble-updates 1:3.1.2-2.1ubuntu0.1 all [upgradable from: 1:3.1.2-2.1build1.1]
+//
+// The groups are name, suites, candidate version, architecture and the
+// installed version. Versions are runs of non-space so epochs and tildes match.
+var APT_LIST_UPGRADABLE_REGEX = regexp.MustCompile(`^(\S+?)/(\S+)\s+(\S+)\s+(\S+)\s+\[upgradable from:\s+([^\]\s]+)\]`)
+
+// ParseAptListUpgradable reads `apt list --upgradable`. Unlike a simulated
+// `apt-get upgrade`, it lists every installed package whose candidate is newer:
+// held packages, packages an upgrade keeps back because they need a new
+// dependency (every kernel update), phased updates, and foreign-architecture
+// packages.
+//
+// The result is keyed by "<name>/<arch>": a multi-arch package installed for
+// two architectures appears on two lines under the same name.
+func ParseAptListUpgradable(input io.Reader) (map[string]PackageUpdate, error) {
+	pkgs := map[string]PackageUpdate{}
+	scanner := bufio.NewScanner(input)
+	scanner.Buffer(nil, dpkgMaxLine)
+	for scanner.Scan() {
+		m := APT_LIST_UPGRADABLE_REGEX.FindStringSubmatch(scanner.Text())
+		if m == nil {
+			continue
+		}
+		name := stripDebArchQualifier(m[1])
+		pkgs[name+"/"+m[4]] = PackageUpdate{
+			Name:      name,
+			Version:   m[5],
+			Available: m[3],
+			Arch:      m[4],
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("could not read the apt upgradable list to its end: %w", err)
+	}
+	return pkgs, nil
+}
+
+// mergeDebUpdates joins the updates `apt list --upgradable` and the simulated
+// `apt-get upgrade` report into one map keyed by "<name>/<arch>".
+//
+// apt list is the complete source on apt 2.0 and later, but apt 1.2 and 1.6
+// (Ubuntu 16.04 and 18.04) print a multi-arch package once per name, so a
+// package installed for amd64 and i386 shows only one of the two. The simulated upgrade still names both
+// when neither is held, which is what the merge recovers. Where both report a
+// package, apt list wins: it is the candidate apt would install.
+func mergeDebUpdates(aptList, dryRun map[string]PackageUpdate) map[string]PackageUpdate {
+	res := make(map[string]PackageUpdate, len(aptList)+len(dryRun))
+	for _, u := range dryRun {
+		res[u.Name+"/"+u.Arch] = u
+	}
+	for _, u := range aptList {
+		res[u.Name+"/"+u.Arch] = u
+	}
+	return res
 }
 
 // Debian, Ubuntu
@@ -397,19 +473,155 @@ func (dpm *DebPkgManager) timeZone(fs afero.Fs) *time.Location {
 }
 
 func (dpm *DebPkgManager) Available() (map[string]PackageUpdate, error) {
+	if !dpm.conn.Capabilities().Has(shared.Capability_RunCommand) {
+		return nil, errors.New("cannot check for deb package updates without running commands")
+	}
+
 	// TODO: run this as a complete shell script in motor
 	// DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1
 	// readlock() { cat /proc/locks | awk '{print $5}' | grep -v ^0 | xargs -I {1} find /proc/{1}/fd -maxdepth 1 -exec readlink {} \; | grep '^/var/lib/dpkg/lock$'; }
 	// while test -n "$(readlock)"; do sleep 1; done
 	// DEBIAN_FRONTEND=noninteractive apt-get upgrade --dry-run
+	//
+	// The refresh's exit status is not checked. As non-root it always fails
+	// on the lock, while the indexes the system's own apt timers refresh are
+	// still current, and a single unreachable repository fails it as root.
+	// What matters is whether apt has any indexes to read, which
+	// checkAptIndexes answers when nothing is pending.
 	_, _ = dpm.conn.RunCommand("DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1")
 
-	cmd, err := dpm.conn.RunCommand("DEBIAN_FRONTEND=noninteractive apt-get upgrade --dry-run")
-	if err != nil {
-		log.Debug().Err(err).Msg("mql[packages]> could not run apt-get upgrade")
-		return nil, fmt.Errorf("could not run apt-get upgrade")
+	// A simulated upgrade only names what `apt-get upgrade` would install:
+	// it leaves out held packages, packages kept back because they need a
+	// new dependency (every kernel update), and phased updates. apt list
+	// reports them all and needs no root.
+	aptList, listErr := runAptUpdateSource(dpm.conn, aptListUpgradableCmd, ParseAptListUpgradable)
+	if listErr != nil {
+		log.Debug().Err(listErr).Msg("mql[packages]> could not run apt list --upgradable")
 	}
-	return ParseDpkgUpdates(cmd.Stdout)
+	dryRun, dryErr := runAptUpdateSource(dpm.conn, aptUpgradeDryRunCmd, ParseDpkgUpdates)
+	if dryErr != nil {
+		log.Debug().Err(dryErr).Msg("mql[packages]> could not run apt-get upgrade --dry-run")
+	}
+
+	if listErr != nil && dryErr != nil {
+		// Without apt there is no update check, as on a container that
+		// had it removed. That is not a failed check.
+		if errors.Is(listErr, errAptNotFound) && errors.Is(dryErr, errAptNotFound) {
+			return nil, errAptNotFound
+		}
+		return nil, fmt.Errorf("%w: %w; %w", ErrUpdateCheckFailed, listErr, dryErr)
+	}
+
+	res := mergeDebUpdates(aptList, dryRun)
+	if len(res) == 0 {
+		if err := dpm.checkAptIndexes(); err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+const (
+	// aptListUpgradableCmd lists every installed package that has a newer
+	// candidate. LC_ALL=C keeps the "[upgradable from: ...]" marker
+	// untranslated.
+	aptListUpgradableCmd = "LC_ALL=C apt list --upgradable"
+	aptUpgradeDryRunCmd  = "DEBIAN_FRONTEND=noninteractive apt-get upgrade --dry-run"
+	// aptPolicyCmd lists the package files apt has read into its cache.
+	aptPolicyCmd = "LC_ALL=C apt-cache policy"
+)
+
+// errAptNotFound is returned when the host has no apt to ask.
+var errAptNotFound = errors.New("apt is not installed")
+
+// aptMaxErr caps how much of apt's stderr goes into an error.
+const aptMaxErr = 512
+
+// runAptUpdateSource runs one apt command that reports pending updates and
+// parses its output. A non-zero exit status is an error: apt prints nothing
+// to stdout when it cannot open its cache, and reading that as "no updates"
+// reported every package as up to date.
+func runAptUpdateSource(conn shared.Connection, command string, parse func(io.Reader) (map[string]PackageUpdate, error)) (map[string]PackageUpdate, error) {
+	cmd, err := conn.RunCommand(command)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", command, err)
+	}
+	if cmd.ExitStatus == 127 {
+		return nil, errAptNotFound
+	}
+	if cmd.ExitStatus != 0 {
+		return nil, fmt.Errorf("%s exited with status %d%s", command, cmd.ExitStatus, aptStderr(cmd))
+	}
+	return parse(cmd.Stdout)
+}
+
+// aptStderr returns ": <stderr>" for an error message, trimmed and capped,
+// or "" when apt printed nothing.
+func aptStderr(cmd *shared.Command) string {
+	if cmd.Stderr == nil {
+		return ""
+	}
+	b, err := io.ReadAll(io.LimitReader(cmd.Stderr, 64*1024))
+	if err != nil {
+		return ""
+	}
+	msg := strings.TrimSpace(string(b))
+	if len(msg) > aptMaxErr {
+		msg = strings.ToValidUTF8(msg[:aptMaxErr], "") + "..."
+	}
+	if msg == "" {
+		return ""
+	}
+	return ": " + msg
+}
+
+// checkAptIndexes tells "nothing is pending" apart from "apt knows of no
+// repository". A stock cloud image ships with an empty /var/lib/apt/lists,
+// and as non-root `apt-get update` cannot fill it (it fails on the lock).
+// apt list and the simulated upgrade then both succeed and report nothing,
+// because every installed package is its own only candidate.
+func (dpm *DebPkgManager) checkAptIndexes() error {
+	cmd, err := dpm.conn.RunCommand(aptPolicyCmd)
+	if err != nil {
+		return fmt.Errorf("%w: %s: %w", ErrUpdateCheckFailed, aptPolicyCmd, err)
+	}
+	if cmd.ExitStatus != 0 {
+		return fmt.Errorf("%w: %s exited with status %d%s", ErrUpdateCheckFailed, aptPolicyCmd, cmd.ExitStatus, aptStderr(cmd))
+	}
+	ok, err := AptHasPackageIndexes(cmd.Stdout)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrUpdateCheckFailed, err)
+	}
+	if !ok {
+		return fmt.Errorf("%w: apt has no package indexes, run apt-get update as root", ErrUpdateCheckFailed)
+	}
+	return nil
+}
+
+// aptPolicyPackagesRegex matches a repository's package index in the
+// "Package files:" section of `apt-cache policy`:
+//
+//	500 http://deb.debian.org/debian bookworm/main amd64 Packages
+//	500 file:/srv/repo ./ Packages
+//
+// dpkg's status file (" 100 /var/lib/dpkg/status") is listed there too, and
+// is the only entry when apt has no indexes.
+var aptPolicyPackagesRegex = regexp.MustCompile(`^\s*-?\d+\s+\S.*\sPackages\s*$`)
+
+// AptHasPackageIndexes reads `apt-cache policy` and reports whether apt has
+// read at least one repository's package index.
+func AptHasPackageIndexes(input io.Reader) (bool, error) {
+	scanner := bufio.NewScanner(input)
+	scanner.Buffer(nil, dpkgMaxLine)
+	for scanner.Scan() {
+		if aptPolicyPackagesRegex.MatchString(scanner.Text()) {
+			return true, nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return false, fmt.Errorf("could not read apt-cache policy to its end: %w", err)
+	}
+	return false, nil
 }
 
 // FindFileOwner implements PkgFileOwnershipResolver via `dpkg -S`, which prints
