@@ -5575,7 +5575,11 @@ mongodb {
 // configuration before the server has been restarted, for example to detect
 // drift between the file and a running server. The file is a nested YAML
 // document and has no include mechanism, so a parse reads exactly one file
-// and `params` holds the whole tree as written.
+// and `params` holds the whole tree as written. A file in the legacy
+// `name = value` format the server also reads (`bind_ip`, `auth`,
+// `sslMode`), as shipped in /etc/mongodb.conf by older Debian and Ubuntu
+// packages, is translated into the same tree, and options with no YAML
+// counterpart stay at the top level under their legacy names.
 //
 // Convenience fields flatten the branches that carry security posture:
 // network binding, TLS material, authentication and authorization, the
@@ -5602,10 +5606,13 @@ mongodb.conf {
   port(params) int
   // net.bindIp option split into individual addresses
   //
-  // Reports 127.0.0.1 when the option is unset, which is the server default
-  // since 3.6. Both spellings the server reads are accepted: a
-  // comma-delimited string and a YAML sequence. Read bindIpAll alongside it,
-  // which binds every interface regardless of what this option lists.
+  // When bindIpAll is true this reports 0.0.0.0 (plus :: with ipv6), the
+  // addresses the server binds whatever bindIp lists. When neither option is
+  // set it reports the server default for the installed version: 127.0.0.1
+  // from 3.6 on, and 0.0.0.0 (plus :: with ipv6) before 3.6, when the server
+  // listened on every interface. It is null when neither option is set and
+  // the server version cannot be read. Both spellings the server reads are
+  // accepted: a comma-delimited string and a YAML sequence.
   bindIp(params) []string
   // net.bindIpAll option, which binds every interface regardless of bindIp
   bindIpAll(params) bool
@@ -5695,8 +5702,17 @@ mongodb.conf {
   // users yet.
   enableLocalhostAuthBypass(params) bool
   // setParameter.authenticationMechanisms option split into individual mechanisms
+  //
+  // When the option is unset this reports the server default for the
+  // installed version: MONGODB-X509, SCRAM-SHA-1, and SCRAM-SHA-256 from 4.0
+  // on (without SCRAM-SHA-1 in TLS FIPS mode from 8.3 on), and MONGODB-CR,
+  // MONGODB-X509, and SCRAM-SHA-1 on 3.x. It is null when the option is unset
+  // and the server version cannot be read or predates 3.0.
   authenticationMechanisms(params) []string
-  // setParameter.scramIterationCount option (15000 when unset)
+  // setParameter.scramIterationCount option
+  //
+  // Iteration count for new SCRAM-SHA-1 credentials, 10000 when unset. Null
+  // for a server older than 3.0, which has no SCRAM.
   scramIterationCount(params) int
   // setParameter.opensslCipherConfig option (OpenSSL cipher string)
   opensslCipherConfig(params) string
