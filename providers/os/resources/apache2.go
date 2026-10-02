@@ -737,16 +737,29 @@ func (s *mqlApache2Conf) securityHeaders(file *mqlFile) (map[string]any, error) 
 
 // serverTokens / serverSignature / traceEnable derive from the params map.
 // They take params() as input so the .lr-declared dependency is correct.
+// When the config does not set the directive, httpd runs with its compiled-in
+// default (https://httpd.apache.org/docs/2.4/mod/core.html), so that is what
+// these report rather than an empty string.
 func (s *mqlApache2Conf) serverTokens(params map[string]any) (string, error) {
-	return apacheParamScalar(params, "ServerTokens"), nil
+	return apacheParamScalarOr(params, "ServerTokens", "Full"), nil
 }
 
 func (s *mqlApache2Conf) serverSignature(params map[string]any) (string, error) {
-	return apacheParamScalar(params, "ServerSignature"), nil
+	return apacheParamScalarOr(params, "ServerSignature", "Off"), nil
 }
 
 func (s *mqlApache2Conf) traceEnable(params map[string]any) (string, error) {
-	return apacheParamScalar(params, "TraceEnable"), nil
+	return apacheParamScalarOr(params, "TraceEnable", "On"), nil
+}
+
+// apacheParamScalarOr is apacheParamScalar with a default for a directive the
+// config does not set. httpd rejects these directives without an argument, so
+// an empty value only occurs when the directive is absent.
+func apacheParamScalarOr(params map[string]any, name string, def string) string {
+	if v := apacheParamScalar(params, name); v != "" {
+		return v
+	}
+	return def
 }
 
 // apacheParamScalar returns the first scalar value from the case-insensitive
