@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -51,7 +52,7 @@ func (c *rpmUpdateHostConn) RunCommand(command string) (*shared.Command, error) 
 		return out("RPM version 4.16.1.3\n", 0), nil
 	case strings.HasPrefix(command, "rpm -qa"):
 		return out(rpmUpdateHostList, 0), nil
-	case strings.Contains(command, "check-update"):
+	case strings.Contains(command, "check-update") || strings.HasPrefix(command, "zypper "):
 		c.mu.Lock()
 		c.updateChecks++
 		c.mu.Unlock()
@@ -193,4 +194,91 @@ func TestPkgUpdatesLookup(t *testing.T) {
 		u = &pkgUpdates{pm: &fakeUpdatesPkgManager{err: failed}}
 		assert.Equal(t, "", lookupOK(t, u, "bash", "x86_64"))
 	})
+
+	// zypper prints the updates of the repositories it could read, then fails
+	// on another one (exit 106). Those updates are real; the absence of one
+	// is not.
+	t.Run("a failed check keeps the updates it found", func(t *testing.T) {
+		failed := fmt.Errorf("%w: zypper list-updates failed (exit status 106)", packages.ErrUpdateCheckFailed)
+		partial := map[string]packages.PackageUpdate{
+			"jq.x86_64": {Name: "jq", Arch: "x86_64", Available: "1.7.1-160000.2.1"},
+		}
+
+		withStructuredErrors(t, true)
+		u := &pkgUpdates{pm: &fakeUpdatesPkgManager{updates: partial, err: failed}}
+		assert.Equal(t, "1.7.1-160000.2.1", lookupOK(t, u, "jq", "x86_64"))
+		_, err := u.lookup("g03-epoch", "x86_64")
+		require.ErrorIs(t, err, packages.ErrUpdateCheckFailed)
+
+		// v13 behavior without the StructuredErrors feature: the partial list
+		withStructuredErrors(t, false)
+		u = &pkgUpdates{pm: &fakeUpdatesPkgManager{updates: partial, err: failed}}
+		assert.Equal(t, "1.7.1-160000.2.1", lookupOK(t, u, "jq", "x86_64"))
+		assert.Equal(t, "", lookupOK(t, u, "g03-epoch", "x86_64"))
+	})
+
+	// From `dnf check-update` on RHEL 9 with the g03 test packages installed.
+	t.Run("multilib and arch-changing rpm updates", func(t *testing.T) {
+		f, err := os.Open("./packages/testdata/dnf-alma9-g03.txt")
+		require.NoError(t, err)
+		defer f.Close()
+		updates, err := packages.ParseRpmCheckUpdate(f)
+		require.NoError(t, err)
+		// a package going from noarch to x86_64
+		updates["g03-tonative.x86_64"] = packages.PackageUpdate{Name: "g03-tonative", Arch: "x86_64", Available: "2.0-1"}
+		// only one half of a multilib pair has an update
+		updates["g03-half.x86_64"] = packages.PackageUpdate{Name: "g03-half", Arch: "x86_64", Available: "2.0-1"}
+		u := &pkgUpdates{pm: &fakeUpdatesPkgManager{updates: updates}}
+
+		assert.Equal(t, "2.0-1", lookupOK(t, u, "g03-multi", "i686"))
+		assert.Equal(t, "2.0-1", lookupOK(t, u, "g03-multi", "x86_64"))
+		// installed as x86_64, updated by a noarch build
+		assert.Equal(t, "2.0-1", lookupOK(t, u, "g03-archchg", "x86_64"))
+		assert.Equal(t, "2.0-1", lookupOK(t, u, "g03-tonative", "noarch"))
+		assert.Equal(t, "", lookupOK(t, u, "g03-half", "i686"), "an x86_64 update does not update the i686 package")
+		assert.Equal(t, "", lookupOK(t, u, "g03-uptodate", "x86_64"))
+	})
+}
+
+// A failed `dnf check-update` (exit 1, nothing on stdout) reached
+// package.outdated as false for every package.
+func TestPackageOutdatedFailedRpmCheck(t *testing.T) {
+	withStructuredErrors(t, true)
+	runtime, _ := newRpmUpdateHost(t, "", 1)
+	pkgs := listPackagesByName(t, runtime)
+
+	outdated := pkgs["openssl"].GetOutdated()
+	require.ErrorIs(t, outdated.Error, packages.ErrUpdateCheckFailed)
+	available := pkgs["bash"].GetAvailable()
+	require.ErrorIs(t, available.Error, packages.ErrUpdateCheckFailed)
+}
+
+// newSuseUpdateHost is newRpmUpdateHost on SLES, where the update check is
+// `zypper -n --xmlout list-updates`.
+func newSuseUpdateHost(t *testing.T, updateFile string, updateExit int) *plugin.Runtime {
+	t.Helper()
+	raw, err := os.ReadFile(updateFile)
+	require.NoError(t, err)
+	base, err := mock.New(0, &inventory.Asset{
+		Platform: &inventory.Platform{Name: "sles", Version: "16.0", Family: []string{"suse", "linux", "unix", "os"}},
+	}, mock.WithData(&mock.TomlData{}))
+	require.NoError(t, err)
+	conn := &rpmUpdateHostConn{Connection: base, updateStdout: string(raw), updateExit: updateExit}
+	return &plugin.Runtime{
+		Connection: conn,
+		Resources:  &syncx.Map[plugin.Resource]{},
+		Callback:   &providerCallbacks{},
+	}
+}
+
+// zypper exits 7 when another zypper or PackageKit holds the zypp lock, and
+// prints no update. package.outdated read false for every package.
+func TestPackageOutdatedFailedZypperCheck(t *testing.T) {
+	withStructuredErrors(t, true)
+	runtime := newSuseUpdateHost(t, "./packages/testdata/zypper-lu-locked-leap16.xml", 7)
+	pkgs := listPackagesByName(t, runtime)
+
+	outdated := pkgs["openssl"].GetOutdated()
+	require.ErrorIs(t, outdated.Error, packages.ErrUpdateCheckFailed)
+	assert.Contains(t, outdated.Error.Error(), "System management is locked")
 }

@@ -342,7 +342,14 @@ type pkgUpdates struct {
 	once sync.Once
 	// byNameArch maps "<name>/<arch>" to the available version.
 	byNameArch map[string]string
-	// err is why the manager could not report its updates.
+	// noarchByName maps a package name to the version of its noarch update,
+	// and byName to the version of its only update when every update of that
+	// name has one architecture. Both serve packages that move between an
+	// architecture and noarch, see lookup.
+	noarchByName map[string]string
+	byName       map[string]string
+	// err is why the manager could not report all of its updates. The maps
+	// hold the ones it did report.
 	err error
 }
 
@@ -355,30 +362,66 @@ func (u *pkgUpdates) load() {
 			log.Debug().Err(err).Str("manager", u.pm.Name()).Msg("mql[packages]> could not retrieve available updates")
 			return
 		}
-		// A check that ran and failed knows nothing about pending updates.
-		// v13 reported no newer version for every package, which a policy
-		// reads as "everything is patched".
+		// A check that ran and failed knows nothing about the updates it did
+		// not report. v13 reported no newer version for those packages, which
+		// a policy reads as "everything is patched".
 		if !plugin.StructuredErrors() {
 			log.Warn().Err(err).Str("manager", u.pm.Name()).Msg("mql[packages]> could not retrieve available updates, packages report no newer version")
+		} else {
+			u.err = err
+		}
+		// zypper prints the updates of the repositories it could read
+		// before it fails on another one. Those are real, so they are kept.
+		if available == nil {
 			return
 		}
-		u.err = err
-		return
 	}
 	u.byNameArch = make(map[string]string, len(available))
+	u.noarchByName = map[string]string{}
+	u.byName = map[string]string{}
+	ambiguous := map[string]bool{}
 	for _, a := range available {
 		u.byNameArch[a.Name+"/"+a.Arch] = a.Available
+		if a.Arch == "noarch" {
+			u.noarchByName[a.Name] = a.Available
+		}
+		if _, ok := u.byName[a.Name]; ok {
+			ambiguous[a.Name] = true
+		}
+		u.byName[a.Name] = a.Available
+	}
+	for name := range ambiguous {
+		delete(u.byName, name)
 	}
 }
 
 // lookup returns the newer version the package manager offers for a package,
 // "" when there is none.
+//
+// An update usually has the installed package's architecture. The exception
+// is a package that moves between an architecture and noarch: dnf offers
+// g03-archchg.noarch 2.0 as the update of g03-archchg.x86_64 1.0, and the
+// reverse move the same way. A multilib pair is not such a case, an i686
+// package is never updated by an x86_64 one, so for an arch-specific package
+// only a noarch update stands in for a missing same-arch one, and a noarch
+// package takes an arch-specific update only when it is the only one.
 func (u *pkgUpdates) lookup(name, arch string) (string, error) {
 	u.once.Do(u.load)
-	if u.err != nil {
+	if v, ok := u.byNameArch[name+"/"+arch]; ok {
+		return v, nil
+	}
+	var v string
+	if arch == "noarch" {
+		v = u.byName[name]
+	} else {
+		v = u.noarchByName[name]
+	}
+	// a failed check that still found this package's update knows it is
+	// outdated; it does not know that any other package is not
+	if v == "" && u.err != nil {
 		return "", u.err
 	}
-	return u.byNameArch[name+"/"+arch], nil
+	return v, nil
 }
 
 // fillPackageArgs resets args and fills in the resource arguments for one
