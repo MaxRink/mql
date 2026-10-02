@@ -3484,6 +3484,7 @@ postgresql.hba.rule 13.35.4
 postgresql.hba.rule.address 13.35.4
 postgresql.hba.rule.authMethod 13.35.4
 postgresql.hba.rule.database 13.35.4
+postgresql.hba.rule.file 14.14.1
 postgresql.hba.rule.lineNumber 13.35.4
 postgresql.hba.rule.options 13.35.4
 postgresql.hba.rule.type 13.35.4
@@ -3492,6 +3493,7 @@ postgresql.hba.rules 13.35.4
 postgresql.ident 13.35.4
 postgresql.ident.file 13.35.4
 postgresql.ident.mapping 13.35.4
+postgresql.ident.mapping.file 14.14.1
 postgresql.ident.mapping.lineNumber 13.35.4
 postgresql.ident.mapping.mapName 13.35.4
 postgresql.ident.mapping.pgUsername 13.35.4
