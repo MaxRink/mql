@@ -50,6 +50,35 @@ var mariadbConfPaths = []string{
 	"/opt/homebrew/etc/my.cnf",
 }
 
+// debianAlternativeTargets maps the root option files Debian and Ubuntu install
+// as targets of the my.cnf alternative to the link the server opens. No server
+// reads these files under their own name: mysqld opens /etc/mysql/my.cnf, and
+// update-alternatives decides which of them that reaches. Installing
+// libmariadb3 next to Oracle MySQL, for example, points the link at
+// mariadb.cnf (mariadb-common registers it at a higher priority than
+// mysql-common's mysql.cnf), and mysqld then never reads mysql.conf.d.
+var debianAlternativeTargets = map[string]string{
+	"/etc/mysql/mysql.cnf":   "/etc/mysql/my.cnf",
+	"/etc/mysql/mariadb.cnf": "/etc/mysql/my.cnf",
+}
+
+// readableCandidates drops the alternative targets whose link exists. While
+// /etc/mysql/my.cnf exists the server reads whatever it reaches and nothing
+// else, so falling through to mysql.cnf or mariadb.cnf after the link was
+// judged to belong to the other product reports options the server ignores.
+// A target is kept only when its link is missing, for example in an image
+// whose /etc/alternatives link does not resolve.
+func readableCandidates(candidates []string, exists func(path string) bool) []string {
+	out := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		if link, ok := debianAlternativeTargets[c]; ok && exists(link) {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // mycnfState is the shared parse state behind the mysql.conf and mariadb.conf
 // resources. It is embedded into each resource's generated Internal struct so
 // both share one code path for candidate selection, include expansion, and the
@@ -154,8 +183,12 @@ func (st *mycnfState) resolve(runtime *plugin.Runtime, wantFlavor string, candid
 		return nil
 	}
 
-	for _, candidate := range candidates {
-		if exists, isDir := probe(candidate); !exists || isDir {
+	isFile := func(path string) bool {
+		exists, isDir := probe(path)
+		return exists && !isDir
+	}
+	for _, candidate := range readableCandidates(candidates, isFile) {
+		if !isFile(candidate) {
 			continue
 		}
 		// Every candidate is parsed before it can be judged. On RHEL-family
@@ -168,7 +201,8 @@ func (st *mycnfState) resolve(runtime *plugin.Runtime, wantFlavor string, candid
 			// to tell which product it belongs to.
 			continue
 		}
-		if mycnf.DetectFlavor(conf, probe) != wantFlavor {
+		banner := func() string { return installedServerFlavor(runtime) }
+		if mycnf.DetectFlavor(conf, probe, banner) != wantFlavor {
 			continue
 		}
 		st.rootPath = candidate
@@ -218,6 +252,23 @@ func installedServerVersion(runtime *plugin.Runtime, resourceName string) string
 		}
 	}
 	return ""
+}
+
+// installedServerFlavor returns the product the installed server binary names
+// in its --version banner, MariaDB included, or the empty string when no server
+// binary could be run. It shares the mysql resource's cached detection, so the
+// binary is run once per scan however many resources ask.
+func installedServerFlavor(runtime *plugin.Runtime) string {
+	raw, err := CreateResource(runtime, "mysql", nil)
+	if err != nil {
+		return ""
+	}
+	m, ok := raw.(*mqlMysql)
+	if !ok {
+		return ""
+	}
+	m.detect()
+	return m.bannerFlavor
 }
 
 // ensureFrom resolves using the path of an already-set file resource, which is

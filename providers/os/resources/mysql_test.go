@@ -6,6 +6,7 @@ package resources
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 	"go.mondoo.com/mql/providers-sdk/v1/inventory"
 	"go.mondoo.com/mql/providers-sdk/v1/plugin"
 	"go.mondoo.com/mql/providers/os/connection/mock"
+	"go.mondoo.com/mql/providers/os/resources/mycnf"
 	"go.mondoo.com/mql/utils/syncx"
 )
 
@@ -96,7 +98,7 @@ func TestMysqlConf_IsEmptyOnMariadbHosts(t *testing.T) {
 
 // The mirror of the above: mariadb.conf must report nothing on a MySQL host.
 func TestMariadbConf_IsEmptyOnMysqlHosts(t *testing.T) {
-	for _, fixture := range []string{"mysql_oracle80.toml", "mysql_ubuntu2404.toml"} {
+	for _, fixture := range []string{"mysql_oracle80.toml", "mysql_ubuntu2404.toml", "mysql_rhel9_mysql.toml"} {
 		t.Run(fixture, func(t *testing.T) {
 			conf := mariadbConf(t, fixture)
 
@@ -115,6 +117,7 @@ func TestMysqlConf_ResolvesOnMysqlHosts(t *testing.T) {
 	for _, tc := range []struct{ fixture, wantPath string }{
 		{"mysql_oracle80.toml", "/etc/my.cnf"},
 		{"mysql_ubuntu2404.toml", "/etc/mysql/my.cnf"},
+		{"mysql_rhel9_mysql.toml", "/etc/my.cnf"},
 	} {
 		t.Run(tc.fixture, func(t *testing.T) {
 			conf := mysqlConf(t, tc.fixture)
@@ -140,6 +143,148 @@ func TestMariadbConf_ResolvesOnMariadbHosts(t *testing.T) {
 			assert.Equal(t, tc.wantPath, file.Data.Path.Data)
 		})
 	}
+}
+
+// On RHEL 8 and later mysql-server pulls in mariadb-connector-c-config, whose
+// [client-mariadb] group made mysql.conf report nothing on a running MySQL
+// server. The server options come from the package's mysql-server.cnf.
+func TestMysqlConf_RhelMysqlWithMariadbConnectorConfig(t *testing.T) {
+	conf := mysqlConf(t, "mysql_rhel9_mysql.toml")
+	opts := serverOptions(t, conf)
+	assert.Equal(t, "/var/lib/mysql", opts["datadir"])
+	assert.Equal(t, "/var/log/mysql/mysqld.log", opts["log_error"])
+}
+
+// RHEL 7's default mariadb-libs installs an /etc/my.cnf holding [mysqld] on a
+// host with no database server. Neither resource may report it.
+func TestConf_IsEmptyWithClientLibrariesOnly(t *testing.T) {
+	mysql := mysqlConf(t, "mysql_rhel7_mariadb_libs.toml")
+	file := mysql.GetFile()
+	require.NoError(t, file.Error)
+	assert.Nil(t, file.Data, "no server is installed")
+	opts := mysql.GetServerOptions()
+	require.NoError(t, opts.Error)
+	assert.Empty(t, opts.Data)
+
+	mariadb := mariadbConf(t, "mysql_rhel7_mariadb_libs.toml")
+	mfile := mariadb.GetFile()
+	require.NoError(t, mfile.Error)
+	assert.Nil(t, mfile.Data)
+}
+
+// mycnfRuntimeWithBanner is mycnfRuntime with the server binary's --version
+// banner available, as on a host where commands can run.
+func mycnfRuntimeWithBanner(t *testing.T, fixture, command, banner string) *plugin.Runtime {
+	t.Helper()
+
+	fixturePath, err := filepath.Abs(filepath.Join("testdata", fixture))
+	require.NoError(t, err)
+
+	asset := &inventory.Asset{
+		Platform: &inventory.Platform{
+			Name:   "debian",
+			Family: []string{"debian", "linux", "unix"},
+		},
+	}
+	conn, err := mock.New(0, asset, mock.WithPath(fixturePath), mock.WithData(&mock.TomlData{
+		Commands: map[string]*mock.Command{
+			command: {Command: command, Stdout: banner + "\n"},
+		},
+	}))
+	require.NoError(t, err)
+
+	return &plugin.Runtime{
+		Connection: conn,
+		Resources:  &syncx.Map[plugin.Resource]{},
+	}
+}
+
+// On Debian, installing libmariadb3 next to Oracle MySQL points the
+// /etc/mysql/my.cnf alternative at mariadb.cnf. mysqld then reads conf.d and
+// mariadb.conf.d and never reads mysql.conf.d, where the hardening lives.
+// mysql.conf used to fall through to /etc/mysql/mysql.cnf and report
+// bind_address 127.0.0.1 and skip_name_resolve for a server listening on every
+// interface with name resolution on.
+func TestMysqlConf_DebianMyCnfAlternativeOwnedByMariadbCommon(t *testing.T) {
+	runtime := mycnfRuntimeWithBanner(t, "mysql_debian12_mysql_libmariadb3.toml",
+		"mysqld --version", "/usr/sbin/mysqld  Ver 8.4.11 for Linux on x86_64 (MySQL Community Server - GPL)")
+
+	raw, err := CreateResource(runtime, "mysql.conf", nil)
+	require.NoError(t, err)
+	conf := raw.(*mqlMysqlConf)
+
+	file := conf.GetFile()
+	require.NoError(t, file.Error)
+	require.NotNil(t, file.Data)
+	assert.Equal(t, "/etc/mysql/my.cnf", file.Data.Path.Data)
+
+	opts := serverOptions(t, conf)
+	assert.NotContains(t, opts, "bind_address", "mysql.conf.d is not read through mariadb.cnf")
+	assert.NotContains(t, opts, "skip_name_resolve")
+
+	bind := conf.GetBindAddress()
+	require.NoError(t, bind.Error)
+	assert.Equal(t, []any{"*"}, bind.Data)
+
+	raw, err = CreateResource(runtime, "mariadb.conf", nil)
+	require.NoError(t, err)
+	mfile := raw.(*mqlMariadbConf).GetFile()
+	require.NoError(t, mfile.Error)
+	assert.Nil(t, mfile.Data, "the server is MySQL")
+}
+
+// Without the banner (no command execution) the option files cannot say which
+// server reads /etc/mysql/my.cnf. mysql.conf must then report nothing rather
+// than /etc/mysql/mysql.cnf, which the server does not read while my.cnf
+// exists.
+func TestMysqlConf_NeverFallsThroughToMysqlCnfWhileMyCnfExists(t *testing.T) {
+	conf := mysqlConf(t, "mysql_debian12_mysql_libmariadb3.toml")
+
+	file := conf.GetFile()
+	require.NoError(t, file.Error)
+	if file.Data != nil {
+		assert.NotEqual(t, "/etc/mysql/mysql.cnf", file.Data.Path.Data)
+	}
+	opts := serverOptions(t, conf)
+	assert.NotContains(t, opts, "bind_address")
+}
+
+func TestReadableCandidates(t *testing.T) {
+	present := func(paths ...string) func(string) bool {
+		return func(p string) bool { return slices.Contains(paths, p) }
+	}
+
+	assert.Equal(t,
+		[]string{"/etc/my.cnf", "/etc/mysql/my.cnf", "/usr/local/mysql/etc/my.cnf"},
+		readableCandidates(mysqlConfPaths[:4], present("/etc/mysql/my.cnf")),
+		"mysql.cnf is only read through my.cnf")
+	assert.Equal(t,
+		[]string{"/etc/my.cnf", "/etc/mysql/my.cnf", "/usr/local/etc/my.cnf"},
+		readableCandidates(mariadbConfPaths[:4], present("/etc/mysql/my.cnf")),
+		"mariadb.cnf is only read through my.cnf")
+	assert.Equal(t,
+		[]string{"/etc/my.cnf", "/etc/mysql/my.cnf", "/etc/mysql/mysql.cnf"},
+		readableCandidates(mysqlConfPaths[:3], present()),
+		"without the link the target stays a candidate")
+}
+
+// apt remove keeps a package's conffiles, so after removing MariaDB on Debian
+// /etc/mysql/my.cnf still reaches mariadb.cnf and 50-server.cnf is still
+// there. With no server binary left, neither resource may report that tree as
+// a running server's configuration.
+func TestConf_IsEmptyAfterServerRemoved(t *testing.T) {
+	mariadb := mariadbConf(t, "mysql_debian13_mariadb_removed.toml")
+	file := mariadb.GetFile()
+	require.NoError(t, file.Error)
+	assert.Nil(t, file.Data, "the MariaDB server is not installed")
+	opts := mariadb.GetServerOptions()
+	require.NoError(t, opts.Error)
+	assert.Empty(t, opts.Data)
+
+	mysql := mysqlConf(t, "mysql_debian13_mariadb_removed.toml")
+	mfile := mysql.GetFile()
+	require.NoError(t, mfile.Error)
+	assert.Nil(t, mfile.Data)
 }
 
 // Naming a file explicitly bypasses the gate: a caller who says which file to
@@ -460,7 +605,9 @@ func TestMysqlConf_UserFiles(t *testing.T) {
 	require.Len(t, sections.Data, 1)
 	client := sections.Data[0].(*mqlMysqlConfSection)
 	assert.Equal(t, "client", client.Name.Data)
-	assert.Equal(t, "hunter2", client.Options.Data["password"])
+	// The password is reported by name so the finding stays queryable, but
+	// its value never leaves the parser.
+	assert.Equal(t, mycnf.RedactedValue, client.Options.Data["password"])
 }
 
 // A .mylogin.cnf is an encrypted credential store. It is reported so its mode
