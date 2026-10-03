@@ -218,6 +218,12 @@ func NewFromTar(id uint32, conf *inventory.Config, asset *inventory.Asset) (*tar
 	if err != nil {
 		return nil, err
 	}
+	return NewFromTarImage(id, conf, asset, img)
+}
+
+// NewFromTarImage is NewFromTar for an image tarball the caller already
+// opened, so the archive is not parsed twice.
+func NewFromTarImage(id uint32, conf *inventory.Config, asset *inventory.Asset, img v1.Image) (*tar.Connection, error) {
 
 	// Resolve the digest before creating the tar connection so a Digest()
 	// failure doesn't leak the temp file that newImageTarConnection allocates,
@@ -236,8 +242,23 @@ func NewFromTar(id uint32, conf *inventory.Config, asset *inventory.Asset) (*tar
 	}
 
 	conn.PlatformIdentifier = containerid.MondooContainerImageID(hash.String())
-	if imgConfig, err := img.ConfigFile(); err == nil {
+	if imgConfig, err := img.ConfigFile(); err == nil && imgConfig != nil {
 		conn.ImageConfig = tar.ImageConfigFrom(imgConfig)
+		conn.PlatformArchitecture = imgConfig.Architecture
 	}
 	return conn, nil
+}
+
+// OpenImageTarball opens path as a saved image (`docker save`, which carries
+// a manifest.json). It reports false for anything else, such as an exported
+// filesystem.
+func OpenImageTarball(path string) (v1.Image, bool) {
+	if path == "" {
+		return nil, false
+	}
+	img, err := tarball.ImageFromPath(path, nil)
+	if err != nil {
+		return nil, false
+	}
+	return img, true
 }
