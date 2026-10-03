@@ -495,6 +495,10 @@ func (j *mqlJboss) readProductVersion() (string, string) {
 		}
 	}
 
+	// the directory's name is a version only for a directory that is there
+	if ok, _ := afs.DirExists(home); !ok {
+		return "", ""
+	}
 	return "", jboss.VersionFromInstallDir(home)
 }
 
