@@ -396,6 +396,47 @@ func TestDict_Methods_Contains(t *testing.T) {
 			ResultIndex: 1,
 			Expectation: false,
 		},
+		// a single `_ == x` searches the string; any other block compares the
+		// whole value as a one-element list
+		{
+			Code:        p + "params['hello'].where(_ == 'll')",
+			Expectation: "ll",
+		},
+		{
+			Code:        p + "params['hello'].any(_ == 'hello' || _ == 'x')",
+			ResultIndex: 1,
+			Expectation: true,
+		},
+		{
+			Code:        p + "params['hello'].none(_ == 'x' || _ == 'y')",
+			ResultIndex: 1,
+			Expectation: true,
+		},
+		{
+			Code:        p + "params['hello'].contains(_ == 'll' || _ == 'zz')",
+			ResultIndex: 1,
+			Expectation: false,
+		},
+		{
+			Code:        p + "params['hello'].where(_ == 'hello' || _ == 'x')",
+			Expectation: []any{"hello"},
+		},
+		{
+			Code:        p + "params['hello'].where(_ != 'x')",
+			Expectation: []any{"hello"},
+		},
+		{
+			Code:        p + "params['hello'].where(_.downcase == 'hello')",
+			Expectation: []any{"hello"},
+		},
+		{
+			Code:        p + "params['hello'].where(_ == /el/)",
+			Expectation: []any{"hello"},
+		},
+		{
+			Code:        p + "params['hello'].where(_ == empty)",
+			Expectation: []any{},
+		},
 		{
 			Code:        p + "params['string-array'].contains('a')",
 			ResultIndex: 1,
