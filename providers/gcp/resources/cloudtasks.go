@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 
 	cloudtasks "cloud.google.com/go/cloudtasks/apiv2"
@@ -187,12 +188,17 @@ func (c *cloudTasksCmekCache) kmsKeyName(runtime *plugin.Runtime, location strin
 	}
 
 	conn := runtime.Connection.(*connection.GcpConnection)
-	creds, err := conn.Credentials(cloudtasks.DefaultAuthScopes()...)
+	// The connection's HTTP client is authenticated and traces every call;
+	// a gRPC trace option would be ignored by a REST client.
+	httpClient, err := conn.Client(cloudtasks.DefaultAuthScopes()...)
 	if err != nil {
 		return "", err
 	}
 	ctx := context.Background()
-	client, err := cloudtasks.NewClient(ctx, option.WithCredentials(creds), connection.GRPCClientTraceOption())
+	// GetCmekConfig goes over REST: the gRPC client sends the routing header
+	// as "name=", and the service rejects the call unless it reads
+	// "cmek_config.name=".
+	client, err := cloudtasks.NewRESTClient(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return "", err
 	}
@@ -202,18 +208,14 @@ func (c *cloudTasksCmekCache) kmsKeyName(runtime *plugin.Runtime, location strin
 		Name: fmt.Sprintf("projects/%s/locations/%s/cmekConfig", c.projectId, location),
 	})
 	if err != nil {
-		if s, ok := grpcStatusOf(err); ok {
-			switch s.Code() {
-			case codes.NotFound:
-				// No CMEK config exists for the location: Google-managed encryption.
-				c.keys[location] = ""
-				return "", nil
-			case codes.PermissionDenied:
-				if saysServiceDisabled(err) {
-					return "", llx.NotApplicable(err)
-				}
-				return "", llx.Forbidden(err, llx.WithPermissions("cloudtasks.cmekConfig.get"))
-			}
+		if gerr, ok := googleAPIError(err); ok && gerr.Code == http.StatusNotFound {
+			// A 404 is an answer, not a refusal: no CMEK config exists for the
+			// location, so it uses Google-managed encryption.
+			c.keys[location] = ""
+			return "", nil
+		}
+		if refusal := classifyRefusal(err, "cloudtasks.cmekConfig.get"); refusal != nil {
+			return "", refusal
 		}
 		return "", err
 	}
