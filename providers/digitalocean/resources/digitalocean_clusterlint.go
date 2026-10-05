@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -66,8 +67,8 @@ func clusterlintOwners(d *clusterlintDiagnostic) []any {
 }
 
 // fetchClusterlint reads the cluster's most recent clusterlint run once. A
-// 404 means no run is stored for the cluster, which leaves the result nil and
-// both dependent fields null.
+// 412 or 404 means no run is stored for the cluster, which leaves the result
+// nil and both dependent fields null.
 func (r *mqlDigitaloceanKubernetesCluster) fetchClusterlint() (*clusterlintResults, error) {
 	r.clusterlintOnce.Do(func() {
 		if r.Id.Data == "" {
@@ -77,14 +78,18 @@ func (r *mqlDigitaloceanKubernetesCluster) fetchClusterlint() (*clusterlintResul
 		conn := r.MqlRuntime.Connection.(*connection.DigitaloceanConnection)
 		client := conn.Client()
 		ctx := context.Background()
-		req, err := client.NewRequest(ctx, http.MethodGet, fmt.Sprintf("v2/kubernetes/clusters/%s/clusterlint", r.Id.Data), nil)
+		req, err := client.NewRequest(ctx, http.MethodGet, fmt.Sprintf("v2/kubernetes/clusters/%s/clusterlint", url.PathEscape(r.Id.Data)), nil)
 		if err != nil {
 			r.clusterlintErr = err
 			return
 		}
 		root := new(clusterlintResults)
 		if _, err := client.Do(ctx, req, root); err != nil {
-			if isDoNotFound(err) {
+			// The API answers 412 precondition_failed for a cluster that has
+			// never been linted, and 404 when the results have expired. Both
+			// mean there is no run to report, so both read as null rather
+			// than as an error.
+			if isDoNotFound(err) || isDoStatus(err, http.StatusPreconditionFailed) {
 				return
 			}
 			r.clusterlintErr = classifyDoError(err)
