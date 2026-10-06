@@ -70,6 +70,34 @@ func (a *mqlAwsCloudfrontKeyValueStore) id() (string, error) {
 	return a.Id.Data, nil
 }
 
+// comment reads the store's comment. ListKeyValueStores leaves it out, so
+// unless the list carried one it takes a DescribeKeyValueStore call.
+func (a *mqlAwsCloudfrontKeyValueStore) comment() (string, error) {
+	if a.cacheComment != nil {
+		return *a.cacheComment, nil
+	}
+	conn := a.MqlRuntime.Connection.(*connection.AwsConnection)
+	name := a.Name.Data
+	resp, err := conn.Cloudfront("").DescribeKeyValueStore(context.Background(), &cloudfront.DescribeKeyValueStoreInput{Name: &name})
+	if err != nil {
+		if Is400AccessDeniedError(err) {
+			if plugin.StructuredErrors() {
+				return "", llx.Forbidden(err, llx.WithPermissions("cloudfront:DescribeKeyValueStore"))
+			}
+			// Before this field made its own call it never failed; keep a
+			// refusal null until structured errors are on.
+			a.Comment.State = plugin.StateIsSet | plugin.StateIsNull
+			return "", nil
+		}
+		return "", err
+	}
+	if resp.KeyValueStore == nil || resp.KeyValueStore.Comment == nil {
+		a.Comment.State = plugin.StateIsSet | plugin.StateIsNull
+		return "", nil
+	}
+	return *resp.KeyValueStore.Comment, nil
+}
+
 func (a *mqlAwsCloudfront) keyValueStores() ([]any, error) {
 	conn := a.MqlRuntime.Connection.(*connection.AwsConnection)
 	svc := conn.Cloudfront("")
@@ -94,7 +122,6 @@ func (a *mqlAwsCloudfront) keyValueStores() ([]any, error) {
 			args := map[string]*llx.RawData{
 				"id":               llx.StringDataPtr(item.Id),
 				"name":             llx.StringDataPtr(item.Name),
-				"comment":          llx.StringDataPtr(item.Comment),
 				"status":           llx.StringDataPtr(item.Status),
 				"arn":              llx.StringDataPtr(item.ARN),
 				"lastModifiedTime": llx.TimeDataPtr(item.LastModifiedTime),
@@ -103,6 +130,7 @@ func (a *mqlAwsCloudfront) keyValueStores() ([]any, error) {
 			if err != nil {
 				return nil, err
 			}
+			mqlResource.(*mqlAwsCloudfrontKeyValueStore).cacheComment = item.Comment
 			res = append(res, mqlResource)
 		}
 		if resp.KeyValueStoreList.NextMarker == nil {
