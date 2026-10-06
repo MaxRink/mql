@@ -240,6 +240,8 @@ private aws.billing.budget @defaults("name budgetType budgetLimit actualSpend") 
   // threshold, thresholdType (PERCENTAGE|ABSOLUTE_VALUE), notificationState
   // (OK|ALARM), and subscribers ([{type, address}]).
   notifications() []dict
+  // Tags assigned to the budget
+  tags() map[string]string
 }
 
 // AWS Organizations organization
@@ -360,6 +362,8 @@ private aws.organization.serviceControlPolicy @defaults("name id") {
   content() string
   // Parsed statements from the policy content
   statements() []aws.iam.policyStatement
+  // Tags assigned to the service control policy
+  tags() map[string]string
 }
 
 // AWS Organizations policy
@@ -403,6 +407,8 @@ private aws.organization.policy @defaults("name type id") {
   // backup, declarative, AI-services opt-out, and per-service policy types,
   // which use their own document formats: read content for those.
   statements() []aws.iam.policyStatement
+  // Tags assigned to the policy
+  tags() map[string]string
 }
 
 // AWS Organizations effective policy
@@ -477,6 +483,8 @@ private aws.organization.organizationalUnit @defaults("id name path") {
   // Only the policies attached at this level, not the ones the unit inherits
   // from the organization root or a parent unit.
   policies() []aws.organization.policy
+  // Tags assigned to the organizational unit
+  tags() map[string]string
 }
 
 // Amazon Virtual Private Cloud (VPC)
@@ -2260,6 +2268,8 @@ private aws.fsx.cache @defaults("id lifecycle") {
   dataRepositoryAssociations []dict
   // Region where the cache exists
   region string
+  // Tags assigned to the File Cache
+  tags() map[string]string
 }
 
 // AWS FSx backup
@@ -3263,6 +3273,8 @@ private aws.iam.serverCertificate @defaults("name expiration") {
   //
   // Null when IAM reports no upload date for the certificate.
   uploadedAt time
+  // Tags assigned to the server certificate
+  tags() map[string]string
 }
 
 // MFA device assigned to an IAM user
@@ -3517,6 +3529,8 @@ private aws.personalize.datasetGroup @defaults("name domain status region") {
   eventTrackers() []aws.personalize.eventTracker
   // Filters that constrain recommendations served from the group
   filters() []aws.personalize.filter
+  // Tags assigned to the dataset group
+  tags() map[string]string
 }
 
 // Amazon Personalize dataset
@@ -3542,6 +3556,8 @@ private aws.personalize.dataset @defaults("name datasetType status") {
   createdAt time
   // Last modification timestamp
   updatedAt time
+  // Tags assigned to the dataset
+  tags() map[string]string
 }
 
 // Amazon Personalize solution
@@ -3571,6 +3587,8 @@ private aws.personalize.solution @defaults("name status") {
   updatedAt time
   // Campaigns that serve this solution's model
   campaigns() []aws.personalize.campaign
+  // Tags assigned to the solution
+  tags() map[string]string
 }
 
 // Amazon Personalize campaign
@@ -3596,6 +3614,8 @@ private aws.personalize.campaign @defaults("name status minProvisionedTPS") {
   createdAt time
   // Last modification timestamp
   updatedAt time
+  // Tags assigned to the campaign
+  tags() map[string]string
 }
 
 // Amazon Personalize domain recommender
@@ -3618,6 +3638,8 @@ private aws.personalize.recommender @defaults("name status") {
   createdAt time
   // Last modification timestamp
   updatedAt time
+  // Tags assigned to the recommender
+  tags() map[string]string
 }
 
 // Amazon Personalize event tracker
@@ -3640,6 +3662,8 @@ private aws.personalize.eventTracker @defaults("name status") {
   createdAt time
   // Last modification timestamp
   updatedAt time
+  // Tags assigned to the event tracker
+  tags() map[string]string
 }
 
 // Amazon Personalize filter
@@ -3660,6 +3684,8 @@ private aws.personalize.filter @defaults("name status") {
   createdAt time
   // Last modification timestamp
   updatedAt time
+  // Tags assigned to the filter
+  tags() map[string]string
 }
 
 // Amazon Personalize dataset schema
@@ -4879,6 +4905,8 @@ private aws.sagemaker.monitoringJobDefinition @defaults("arn name type") {
   createdAt time
   // Network configuration
   networkConfig() aws.sagemaker.monitoringJobDefinition.networkConfig
+  // Tags assigned to the monitoring job definition
+  tags() map[string]string
 }
 
 // AWS SageMaker data quality job definition
@@ -4907,6 +4935,8 @@ private aws.sagemaker.dataQualityJobDefinition @defaults("arn name") {
   iamRole() aws.iam.role
   // Stopping condition
   stoppingCondition() dict
+  // Tags assigned to the job definition
+  tags() map[string]string
 }
 
 // AWS SageMaker model quality job definition
@@ -4935,6 +4965,8 @@ private aws.sagemaker.modelQualityJobDefinition @defaults("arn name") {
   iamRole() aws.iam.role
   // Stopping condition
   stoppingCondition() dict
+  // Tags assigned to the job definition
+  tags() map[string]string
 }
 
 // AWS SageMaker model bias job definition
@@ -4963,6 +4995,8 @@ private aws.sagemaker.modelBiasJobDefinition @defaults("arn name") {
   iamRole() aws.iam.role
   // Stopping condition
   stoppingCondition() dict
+  // Tags assigned to the job definition
+  tags() map[string]string
 }
 
 // AWS SageMaker model explainability job definition
@@ -4991,6 +5025,8 @@ private aws.sagemaker.modelExplainabilityJobDefinition @defaults("arn name") {
   iamRole() aws.iam.role
   // Stopping condition
   stoppingCondition() dict
+  // Tags assigned to the job definition
+  tags() map[string]string
 }
 
 // AWS SageMaker experiment
@@ -5505,6 +5541,8 @@ private aws.sagemaker.notebookInstanceLifecycleConfig @defaults("arn name") {
   onCreate() []string
   // Base64-encoded shell scripts run on instance start
   onStart() []string
+  // Tags assigned to the lifecycle configuration
+  tags() map[string]string
 }
 
 // AWS SageMaker custom container image
@@ -5531,6 +5569,8 @@ private aws.sagemaker.image @defaults("arn name status") {
   iamRole() aws.iam.role
   // Versions of the image
   versions() []aws.sagemaker.image.version
+  // Tags assigned to the image
+  tags() map[string]string
 }
 
 // AWS SageMaker image version
@@ -5691,6 +5731,8 @@ private aws.sagemaker.workforce @defaults("arn name") {
   vpcSubnets() []aws.vpc.subnet
   // Security groups associated with the workforce
   vpcSecurityGroups() []aws.ec2.securitygroup
+  // Tags assigned to the workforce
+  tags() map[string]string
 }
 
 // AWS SageMaker workteam
@@ -8192,6 +8234,8 @@ private aws.guardduty.customDetectionRule.association @defaults("associationId m
   // The rule stops evaluating in the associated account after this time.
   // Null when the association carries no expiry.
   expiresAt time
+  // Tags assigned to the association
+  tags() map[string]string
 }
 
 // Amazon GuardDuty custom detection rule organization rollout
@@ -9180,6 +9224,8 @@ private aws.securityhub.automationRule @defaults("ruleName ruleStatus") {
   updatedAt time
   // Who created the rule
   createdBy string
+  // Tags assigned to the automation rule
+  tags() map[string]string
 }
 
 // AWS Security Hub insight (saved filter/aggregation)
@@ -9299,6 +9345,8 @@ private aws.shield.protection @defaults("arn name resourceArn") {
   applicationLayerAutomaticResponseEnabled bool
   // WAF rule action used by automatic application-layer mitigation (BLOCK or COUNT; empty when not configured)
   applicationLayerAutomaticResponseAction string
+  // Tags assigned to the protection
+  tags() map[string]string
 }
 
 // AWS Shield Advanced protection group
@@ -9315,6 +9363,8 @@ private aws.shield.protectionGroup @defaults("id aggregation pattern") {
   resourceType string
   // List of member resource ARNs (for ARBITRARY pattern)
   members []string
+  // Tags assigned to the protection group
+  tags() map[string]string
 }
 
 // AWS Shield Advanced DRT (Shield Response Team) access configuration
@@ -12181,6 +12231,8 @@ private aws.cloudfront.trustStore @defaults("name status numberOfCaCertificates"
   lastModifiedAt time
   // Whether the trust store uses the CA certificate's OCSP endpoint to check certificate revocation status
   useClientCertificateOcspEndpoint() bool
+  // Tags assigned to the trust store
+  tags() map[string]string
 }
 
 // Amazon CloudFront Anycast static IP list
@@ -12527,6 +12579,8 @@ private aws.cloudfront.keyValueStore @defaults("name status lastModifiedTime") {
   arn string
   // When the key value store was last modified
   lastModifiedTime time
+  // Tags assigned to the key value store
+  tags() map[string]string
 }
 
 // Amazon CloudFront public key
@@ -13294,6 +13348,8 @@ private aws.s3.bucket.accessPoint @defaults("name networkOrigin") {
   blockPublicAccess() aws.s3.publicAccessBlock
   // Resource policy attached to the access point
   policy() string
+  // Tags assigned to the access point
+  tags() map[string]string
 }
 
 // Amazon S3 bucket grant
@@ -13523,6 +13579,8 @@ private aws.applicationAutoscaling.target @defaults("arn") {
   policies() []aws.applicationAutoscaling.policy
   // Scheduled scaling actions for this target
   scheduledActions() []aws.applicationAutoscaling.scheduledAction
+  // Tags assigned to the scalable target
+  tags() map[string]string
 }
 
 // AWS Application Auto Scaling policy
@@ -14039,6 +14097,8 @@ private aws.backup.legalHold @defaults("title status region") {
   createdAt time
   // Time the legal hold was canceled
   cancelledAt time
+  // Tags assigned to the legal hold
+  tags() map[string]string
 }
 
 // AWS Backup access point
@@ -16937,6 +16997,8 @@ private aws.route53.resolver.endpoint @defaults("id name direction status") {
   creationTime string
   // Last modification timestamp
   modificationTime string
+  // Tags assigned to the Resolver endpoint
+  tags() map[string]string
 }
 
 // Route 53 Resolver rule
@@ -16982,6 +17044,8 @@ private aws.route53.resolver.rule @defaults("id name domainName ruleType status"
   creationTime string
   // Last modification timestamp
   modificationTime string
+  // Tags assigned to the Resolver rule
+  tags() map[string]string
 }
 
 // Route 53 Resolver rule association
@@ -17051,6 +17115,8 @@ private aws.route53.resolver.queryLogConfig @defaults("id name status destinatio
   creationTime string
   // Caller-supplied request id used to create the configuration
   creatorRequestId string
+  // Tags assigned to the query logging configuration
+  tags() map[string]string
 }
 
 // Route 53 Resolver query log configuration association
@@ -17121,6 +17187,8 @@ private aws.route53.resolver.firewallRuleGroup @defaults("id name ruleCount stat
   creatorRequestId string
   // Ordered list of rules in the group
   firewallRules() []aws.route53.resolver.firewallRule
+  // Tags assigned to the firewall rule group
+  tags() map[string]string
 }
 
 // Route 53 Resolver DNS Firewall rule
@@ -17229,6 +17297,8 @@ private aws.route53.resolver.firewallRuleGroupAssociation @defaults("id name sta
   modificationTime string
   // Caller-supplied request id used to create the association
   creatorRequestId string
+  // Tags assigned to the firewall rule group association
+  tags() map[string]string
 }
 
 // Route 53 Resolver DNS Firewall domain list
@@ -17270,6 +17340,8 @@ private aws.route53.resolver.firewallDomainList @defaults("id name domainCount s
   modificationTime string
   // Caller-supplied request id used to create the domain list
   creatorRequestId string
+  // Tags assigned to the firewall domain list
+  tags() map[string]string
 }
 
 // Route 53 Resolver DNS Firewall per-VPC configuration
@@ -17729,6 +17801,8 @@ private aws.dms.replicationInstance @defaults("arn replicationInstanceIdentifier
   // `ReplicationInstanceClass`; each holds the new value that will be
   // applied to the corresponding attribute at the next window.
   pendingModifiedValues dict
+  // Tags assigned to the replication instance
+  tags() map[string]string
 }
 
 // AWS DMS endpoint
@@ -17767,6 +17841,8 @@ private aws.dms.endpoint @defaults("arn endpointIdentifier endpointType engineNa
   certificate() aws.acm.certificate
   // IAM role DMS assumes to access the endpoint (used by S3, Kinesis, OpenSearch, and other AWS-service endpoints)
   serviceAccessIamRole() aws.iam.role
+  // Tags assigned to the endpoint
+  tags() map[string]string
 }
 
 // AWS DMS replication task
@@ -17813,6 +17889,8 @@ private aws.dms.replicationTask @defaults("arn replicationTaskIdentifier migrati
   targetEndpoint() aws.dms.endpoint
   // Replication instance the task runs on
   replicationInstance() aws.dms.replicationInstance
+  // Tags assigned to the replication task
+  tags() map[string]string
 }
 
 // AWS DMS replication subnet group
@@ -19043,6 +19121,8 @@ private aws.lambda.eventSourceMapping @defaults("uuid eventSourceArn") {
   // Between 2 and 1000. Null when no maximum is configured, leaving the
   // mapping to scale on the default schedule.
   maximumConcurrency int
+  // Tags assigned to the event source mapping
+  tags() map[string]string
 }
 
 // AWS Lambda function alias
@@ -19093,6 +19173,8 @@ private aws.lambda.codeSigningConfig @defaults("arn") {
   untrustedArtifactOnDeployment string
   // When the configuration was last modified
   lastModified time
+  // Tags assigned to the code signing configuration
+  tags() map[string]string
 }
 
 // AWS Systems Manager (SSM)
@@ -21794,6 +21876,8 @@ private aws.config.recorder @defaults("name region") {
   recordingStrategy() string
   // Resource types explicitly excluded from recording
   exclusionByResourceTypes() []string
+  // Tags assigned to the configuration recorder
+  tags() map[string]string
 }
 
 // AWS Config delivery channel
@@ -22641,6 +22725,8 @@ private aws.neptune.instance @defaults("arn name status"){
   certificateAuthority string
   // Network protocol the instance is accessible over (IPV4 or DUAL for IPv4/IPv6 dual-stack)
   networkType string
+  // Tags assigned to the instance
+  tags() map[string]string
 }
 
 // Amazon Neptune DB cluster snapshot
@@ -22684,6 +22770,8 @@ private aws.neptune.snapshot @defaults("arn status createdAt") {
   clusterCreatedAt time
   // Region where the snapshot exists
   region string
+  // Tags assigned to the snapshot
+  tags() map[string]string
 }
 
 // Amazon Cognito
@@ -23334,6 +23422,8 @@ private aws.documentdb.snapshot @defaults("arn status createdAt") {
   clusterCreatedAt time
   // Region where the snapshot exists
   region string
+  // Tags assigned to the snapshot
+  tags() map[string]string
 }
 
 // Amazon DocumentDB cluster parameter group
@@ -23350,6 +23440,8 @@ private aws.documentdb.clusterParameterGroup @defaults("name family region") {
   region string
   // Parameters in the group
   parameters() []aws.documentdb.clusterParameter
+  // Tags assigned to the cluster parameter group
+  tags() map[string]string
 }
 
 // Parameter belonging to a DocumentDB cluster parameter group
@@ -23398,6 +23490,8 @@ private aws.documentdb.globalCluster @defaults("globalClusterIdentifier status")
   globalClusterResourceId string
   // Members of the global cluster
   members() []aws.documentdb.globalCluster.member
+  // Tags assigned to the global cluster
+  tags map[string]string
 }
 
 // Member of a DocumentDB global cluster
@@ -23561,6 +23655,8 @@ private aws.timestream.liveanalytics.table @defaults("name region") {
   // the memory store) and `MagneticStoreRetentionPeriodInDays` (how long a
   // record is retained in the magnetic store before deletion).
   retentionProperties dict
+  // Tags assigned to the table
+  tags() map[string]string
 }
 
 // AWS CodeDeploy
@@ -24185,6 +24281,8 @@ private aws.appstream.application @defaults("name displayName enabled platforms 
   createdAt time
   // Region where the application exists
   region string
+  // Tags assigned to the application
+  tags() map[string]string
 }
 
 // Amazon AppStream 2.0 image
@@ -24542,6 +24640,8 @@ private aws.apprunner.autoScalingConfiguration @defaults("name revision status r
   hasAssociatedService bool
   // Region where the revision exists
   region string
+  // Tags assigned to the auto scaling configuration
+  tags() map[string]string
 }
 
 // AWS App Runner source-provider connection
@@ -24567,6 +24667,8 @@ private aws.apprunner.connection @defaults("name providerType status region") {
   createdAt time
   // Region where the connection exists
   region string
+  // Tags assigned to the connection
+  tags() map[string]string
 }
 
 // AWS App Runner VPC connector
@@ -24595,6 +24697,8 @@ private aws.apprunner.vpcConnector @defaults("name revision status region") {
   securityGroups() []aws.ec2.securitygroup
   // Region where the connector exists
   region string
+  // Tags assigned to the VPC connector
+  tags() map[string]string
 }
 
 // AWS App Runner observability configuration revision
@@ -24625,6 +24729,8 @@ private aws.apprunner.observabilityConfiguration @defaults("name revision status
   traceConfigurationVendor() string
   // Region where the revision exists
   region string
+  // Tags assigned to the observability configuration
+  tags() map[string]string
 }
 
 // AWS App Runner VPC ingress connection
@@ -24657,6 +24763,8 @@ private aws.apprunner.vpcIngressConnection @defaults("name status domainName reg
   service() aws.apprunner.service
   // Region where the ingress connection exists
   region string
+  // Tags assigned to the VPC ingress connection
+  tags() map[string]string
 }
 
 // Amazon Athena
@@ -24772,6 +24880,8 @@ private aws.athena.dataCatalog @defaults("name type region") {
   region string
   // List of databases registered in the data catalog
   databases() []aws.athena.database
+  // Tags assigned to the data catalog
+  tags() map[string]string
 }
 
 // Amazon Athena named (saved) query
@@ -24813,6 +24923,8 @@ private aws.athena.capacityReservation @defaults("name status targetDpus region"
   lastSuccessfulAllocationAt time
   // Region where the capacity reservation exists
   region string
+  // Tags assigned to the capacity reservation
+  tags() map[string]string
 }
 
 // Amazon Athena catalog database
@@ -25321,6 +25433,8 @@ private aws.workspaces.image @defaults("imageId name state region") {
   ownerAccountId string
   // AWS region
   region string
+  // Tags assigned to the image
+  tags() map[string]string
 }
 
 // Amazon WorkSpaces bundle
@@ -25363,6 +25477,8 @@ private aws.workspaces.bundle @defaults("bundleId name region") {
   lastUpdatedTime time
   // AWS region
   region string
+  // Tags assigned to the bundle
+  tags() map[string]string
 }
 
 // Amazon WorkSpaces IP access control group
@@ -25386,6 +25502,8 @@ private aws.workspaces.ipGroup @defaults("groupId groupName region") {
   userRules []dict
   // AWS region
   region string
+  // Tags assigned to the IP access control group
+  tags() map[string]string
 }
 
 // Amazon WorkSpaces Web user access logging setting
@@ -25503,6 +25621,8 @@ private aws.kinesis.streamConsumer @defaults("name status") {
   stream() aws.kinesis.stream
   // Region where the consumer exists
   region string
+  // Tags assigned to the stream consumer
+  tags() map[string]string
 }
 
 // Amazon Kinesis Video Streams stream
@@ -25624,6 +25744,8 @@ private aws.kinesis.channel @defaults("name status destinationType region") {
   //
   // Empty when the destination is a general purpose bucket.
   tables() []aws.kinesis.channel.table
+  // Tags assigned to the channel
+  tags() map[string]string
 }
 
 // Amazon Kinesis delivery channel streaming table
@@ -26133,6 +26255,8 @@ private aws.timestream.influxdb.backup @defaults("name status type createdAt") {
   dbInstance() aws.timestream.influxdb.instance
   // KMS key encrypting the backup
   kmsKey() aws.kms.key
+  // Tags assigned to the backup
+  tags() map[string]string
 }
 
 // Amazon Timestream for InfluxDB instance
@@ -26690,6 +26814,8 @@ private aws.glue.database @defaults("name region") {
   // Data Catalog and carry a federatedTable value. When the federation
   // source cannot be read, only the non-federated tables are listed.
   tables() []aws.glue.database.table
+  // Tags assigned to the database
+  tags() map[string]string
 }
 
 // AWS Glue Data Catalog database table
@@ -27081,6 +27207,8 @@ private aws.glue.connection @defaults("name connectionType region") {
   createdAt time
   // Date the connection was last updated
   updatedAt time
+  // Tags assigned to the connection
+  tags() map[string]string
 }
 
 // AWS Glue trigger
@@ -29347,6 +29475,8 @@ private aws.ssm.association @defaults("associationId name") {
   calendarNames() []string
   // Parameter used as the rate-control target when the association runs an Automation runbook
   automationTargetParameterName() string
+  // Tags assigned to the association
+  tags() map[string]string
 }
 
 // Amazon SSM compliance summary per resource
@@ -29461,6 +29591,8 @@ private aws.cloudwatch.logDestination @defaults("name arn") {
   accessPolicy string
   // Creation time of the destination
   createdAt time
+  // Tags assigned to the log destination
+  tags() map[string]string
 }
 
 // Amazon CloudWatch Logs Insights saved query
@@ -29789,6 +29921,8 @@ private aws.sfn.activity @defaults("arn name") {
   region string
   // Date the activity was created
   createdAt time
+  // Tags assigned to the activity
+  tags() map[string]string
 }
 
 // AWS Resource Access Manager (RAM)
@@ -29978,6 +30112,8 @@ private aws.storagegateway.fileShare @defaults("id type status region") {
   auditDestinationArn() string
   // IAM role the gateway assumes to access the backing S3 bucket
   iamRole() aws.iam.role
+  // Tags assigned to the file share
+  tags() map[string]string
 }
 
 // Storage Gateway iSCSI volume
@@ -30013,6 +30149,8 @@ private aws.storagegateway.volume @defaults("id type sizeInBytes region") {
   encrypted() bool
   // KMS key used to encrypt the volume
   kmsKey() aws.kms.key
+  // Tags assigned to the volume
+  tags() map[string]string
 }
 
 // AWS Transfer Family
@@ -30233,6 +30371,8 @@ private aws.appmesh.virtualService @defaults("arn name") {
   virtualNode() aws.appmesh.virtualNode
   // Virtual router backing the virtual service, when the provider type is virtualRouter
   virtualRouter() aws.appmesh.virtualRouter
+  // Tags assigned to the virtual service
+  tags() map[string]string
 }
 
 // AWS App Mesh virtual node
@@ -30283,6 +30423,8 @@ private aws.appmesh.virtualNode @defaults("arn name") {
   loggingAccessLogPath() string
   // Format of access log entries, describing either the JSON key/value pairs or the text format string
   loggingAccessLogFormat() []dict
+  // Tags assigned to the virtual node
+  tags() map[string]string
 }
 
 // AWS App Mesh virtual router
@@ -30446,6 +30588,8 @@ private aws.identitycenter.instance @defaults("arn name status") {
   users() []aws.identitycenter.user
   // Applications configured for this Identity Center instance
   applications() []aws.identitycenter.application
+  // Tags assigned to the instance
+  tags() map[string]string
 }
 
 // AWS IAM Identity Center application
@@ -30476,6 +30620,8 @@ private aws.identitycenter.application @defaults("name status applicationProvide
   signInOrigin string
   // URL that accepts authentication requests for the application (set when signInOrigin is APPLICATION)
   applicationUrl string
+  // Tags assigned to the application
+  tags() map[string]string
 }
 
 // AWS IAM Identity Center permission set
@@ -30980,6 +31126,8 @@ private aws.controltower.landingZone @defaults("arn status") {
   driftStatus() string
   // Status: ACTIVE, PROCESSING, or FAILED
   status() string
+  // Tags assigned to the landing zone
+  tags() map[string]string
 }
 
 // AWS Control Tower enabled baseline
@@ -31006,6 +31154,8 @@ private aws.controltower.enabledBaseline @defaults("arn baselineIdentifier") {
   // target OU no longer matches the baseline configuration defined on
   // that OU.
   driftStatus dict
+  // Tags assigned to the enabled baseline
+  tags() map[string]string
 }
 
 // Amazon Bedrock
@@ -31428,6 +31578,8 @@ private aws.bedrock.agentCore.paymentCredentialProvider @defaults("name vendor")
   createdAt time
   // Time the payment credential provider was last updated
   updatedAt time
+  // Tags assigned to the credential provider
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore gateway
@@ -31476,6 +31628,8 @@ private aws.bedrock.agentCore.gateway @defaults("name status protocolType") {
   targets() []aws.bedrock.agentCore.gatewayTarget
   // Rate limits that cap how fast callers may drive the gateway
   rateLimits() []aws.bedrock.agentCore.gatewayRateLimit
+  // Tags assigned to the gateway
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore gateway rate limit
@@ -31587,6 +31741,8 @@ private aws.bedrock.agentCore.capacityProvider @defaults("name status region") {
   rootVolumeKmsKey() aws.kms.key
   // Named persistent EBS volumes agent runtimes can mount
   volumes() []aws.bedrock.agentCore.capacityProvider.volume
+  // Tags assigned to the capacity provider
+  tags() map[string]string
 }
 
 // Persistent EBS volume of an AgentCore capacity provider
@@ -31703,6 +31859,8 @@ private aws.bedrock.agentCore.runtime @defaults("name version status") {
   //
   // The version of the AgentCore runtime platform that hosts the agent code, distinct from the agent runtime `version`. Null when the API does not report one.
   platformVersion() string
+  // Tags assigned to the agent runtime
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore runtime endpoint
@@ -31734,6 +31892,8 @@ private aws.bedrock.agentCore.runtimeEndpoint @defaults("name status liveVersion
   createdAt time
   // Time the endpoint was last updated
   updatedAt time
+  // Tags assigned to the runtime endpoint
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore memory
@@ -31760,6 +31920,8 @@ private aws.bedrock.agentCore.memory @defaults("id status") {
   createdAt time
   // Time the memory store was last updated
   updatedAt time
+  // Tags assigned to the memory
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore memory namespace key
@@ -31808,6 +31970,8 @@ private aws.bedrock.agentCore.browser @defaults("name status") {
   createdAt time
   // Time the browser was last updated
   updatedAt time
+  // Tags assigned to the browser
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore code interpreter
@@ -31836,6 +32000,8 @@ private aws.bedrock.agentCore.codeInterpreter @defaults("name status") {
   createdAt time
   // Time the code interpreter was last updated
   updatedAt time
+  // Tags assigned to the code interpreter
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore sandbox file system mount
@@ -31886,6 +32052,8 @@ private aws.bedrock.agentCore.oauth2CredentialProvider @defaults("name vendor") 
   createdAt time
   // Time the credential provider was last updated
   updatedAt time
+  // Tags assigned to the credential provider
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore API-key credential provider
@@ -31905,6 +32073,8 @@ private aws.bedrock.agentCore.apiKeyCredentialProvider @defaults("name") {
   createdAt time
   // Time the credential provider was last updated
   updatedAt time
+  // Tags assigned to the credential provider
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore consent portal
@@ -31960,6 +32130,8 @@ private aws.bedrock.agentCore.consentPortal @defaults("name status portalUrl") {
   iamRole() aws.iam.role
   // Resources served by the consent portal
   sources() []aws.bedrock.agentCore.consentPortal.source
+  // Tags assigned to the consent portal
+  tags() map[string]string
 }
 
 // Amazon Bedrock AgentCore consent portal source
@@ -31996,6 +32168,8 @@ private aws.bedrock.agentCore.workloadIdentity @defaults("name") {
   name string
   // Region where the workload identity exists
   region string
+  // Tags assigned to the workload identity
+  tags() map[string]string
 }
 
 // Amazon Bedrock advanced prompt optimization job
@@ -32028,6 +32202,8 @@ private aws.bedrock.advancedPromptOptimizationJob @defaults("name status") {
   failureMessage() string
   // Model configurations for the optimization job
   modelConfigurations() []dict
+  // Tags assigned to the job
+  tags() map[string]string
 }
 
 // Amazon Bedrock foundation model
@@ -32121,6 +32297,8 @@ private aws.bedrock.guardrail @defaults("id name status") {
   // Keys: `Words` (custom blocked words) and `ManagedWordLists` (managed
   // word lists, such as profanity, that the guardrail blocks).
   wordPolicy() dict
+  // Tags assigned to the guardrail
+  tags() map[string]string
 }
 
 // Amazon Bedrock model invocation logging configuration
@@ -32276,6 +32454,8 @@ private aws.bedrock.agent @defaults("name status foundationModel") {
   promptOverrideLambda() aws.lambda.function
   // Aliases pointing at prepared versions of the agent
   aliases() []aws.bedrock.agent.alias
+  // Tags assigned to the agent
+  tags() map[string]string
 }
 
 // Amazon Bedrock agent action group
@@ -32402,6 +32582,8 @@ private aws.bedrock.agent.alias @defaults("name status") {
   createdAt time
   // Time the alias was last updated
   updatedAt time
+  // Tags assigned to the alias
+  tags() map[string]string
 }
 
 // Amazon Bedrock knowledge base
@@ -32465,6 +32647,8 @@ private aws.bedrock.knowledgeBase @defaults("name status") {
   dataSourceDetails() []aws.bedrock.knowledgeBase.dataSource
   // VPC configurations the knowledge base uses to reach private resources
   vpcConfigurations() []aws.bedrock.knowledgeBase.vpcConfiguration
+  // Tags assigned to the knowledge base
+  tags() map[string]string
 }
 
 // VPC configuration of an Amazon Bedrock knowledge base
@@ -32682,6 +32866,8 @@ private aws.bedrock.flow @defaults("name status version") {
   createdAt time
   // Time the flow was last updated
   updatedAt time
+  // Tags assigned to the flow
+  tags() map[string]string
 }
 
 // Amazon Bedrock model-evaluation job
@@ -32862,6 +33048,8 @@ private aws.qBusiness.application @defaults("name status identityType") {
   plugins() []aws.qBusiness.plugin
   // Web experiences that serve the application to end users
   webExperiences() []aws.qBusiness.webExperience
+  // Tags assigned to the application
+  tags() map[string]string
 }
 
 // Amazon Q Business index
@@ -32885,6 +33073,8 @@ private aws.qBusiness.index @defaults("name status") {
   createdAt time
   // Time the index was last updated
   updatedAt time
+  // Tags assigned to the index
+  tags() map[string]string
 }
 
 // Amazon Q Business data source
@@ -32919,6 +33109,8 @@ private aws.qBusiness.dataSource @defaults("name type status") {
   roleArn() string
   // Sync schedule for the data source as a cron expression (empty when on-demand)
   syncSchedule() string
+  // Tags assigned to the data source
+  tags() map[string]string
 }
 
 // Amazon Q Business retriever
@@ -32946,6 +33138,8 @@ private aws.qBusiness.retriever @defaults("name type status") {
   iamRole() aws.iam.role
   // ARN of the IAM role associated with the retriever
   roleArn() string
+  // Tags assigned to the retriever
+  tags() map[string]string
 }
 
 // Amazon Q Business plugin
@@ -32979,6 +33173,8 @@ private aws.qBusiness.plugin @defaults("name type state") {
   createdAt time
   // Time the plugin was last updated
   updatedAt time
+  // Tags assigned to the plugin
+  tags() map[string]string
 }
 
 // Amazon Q Business web experience
@@ -33001,6 +33197,8 @@ private aws.qBusiness.webExperience @defaults("id status") {
   createdAt time
   // Time the web experience was last updated
   updatedAt time
+  // Tags assigned to the web experience
+  tags() map[string]string
 }
 
 // Amazon Bedrock inference profile
@@ -33041,6 +33239,8 @@ private aws.bedrock.inferenceProfile @defaults("name status type") {
   policyStatements() []aws.iam.policyStatement
   // Whether the resource policy grants access to any principal
   isPublic() bool
+  // Tags assigned to the inference profile
+  tags() map[string]string
 }
 
 // Amazon Bedrock imported model
@@ -33070,6 +33270,8 @@ private aws.bedrock.importedModel @defaults("name modelArchitecture") {
   policyStatements() []aws.iam.policyStatement
   // Whether the resource policy grants access to any principal
   isPublic() bool
+  // Tags assigned to the imported model
+  tags() map[string]string
 }
 
 // Amazon Bedrock prompt
@@ -33094,6 +33296,8 @@ private aws.bedrock.prompt @defaults("name version") {
   createdAt time
   // Time the prompt was last updated
   updatedAt time
+  // Tags assigned to the prompt
+  tags() map[string]string
 }
 
 // AWS Step Functions
@@ -33254,6 +33458,8 @@ private aws.fms.policy @defaults("name resourceType securityServiceType") {
   //
   // Each entry has `memberAccount`, `status`, `violatorCount`, `evaluationLimitExceeded`, `issueInfoMap`, and `lastUpdated`.
   complianceStatuses() []dict
+  // Tags assigned to the policy
+  tags() map[string]string
 }
 
 // AWS Firewall Manager notification channel
@@ -33276,6 +33482,8 @@ private aws.fms.appsList @defaults("name id") {
   name string
   // Applications in the list, each with `appName`, `protocol`, and `port`
   apps []dict
+  // Tags assigned to the applications list
+  tags() map[string]string
 }
 
 // AWS Firewall Manager protocols list
@@ -33288,6 +33496,8 @@ private aws.fms.protocolsList @defaults("name id") {
   name string
   // Protocol names included in the list (tcp, udp, icmp, or numeric IP protocol numbers)
   protocols []string
+  // Tags assigned to the protocols list
+  tags() map[string]string
 }
 
 // AWS Firewall Manager resource set
@@ -33307,6 +33517,8 @@ private aws.fms.resourceSet @defaults("name id status") {
   status string
   // Time the resource set was last modified
   lastUpdateTime time
+  // Tags assigned to the resource set
+  tags() map[string]string
 }
 
 // AWS DataSync
@@ -33359,6 +33571,8 @@ private aws.datasync.task @defaults("arn name status") {
   scheduleStatus() string
   // Time the task was created
   createdAt() time
+  // Tags assigned to the task
+  tags() map[string]string
 }
 
 // AWS DataSync location
@@ -33371,6 +33585,8 @@ private aws.datasync.location @defaults("arn locationUri") {
   locationType string
   // Region where the location exists
   region string
+  // Tags assigned to the location
+  tags() map[string]string
 }
 
 // AWS DataSync agent
@@ -33391,6 +33607,8 @@ private aws.datasync.agent @defaults("arn name status") {
   vpcEndpointId() string
   // Time the agent was activated
   createdAt() time
+  // Tags assigned to the agent
+  tags() map[string]string
 }
 
 // AWS AppFlow
@@ -33555,6 +33773,8 @@ private aws.vpclattice.serviceNetwork.vpcAssociation @defaults("id status") {
   privateDnsEnabled bool
   // When the association was created
   createdAt time
+  // Tags assigned to the association
+  tags() map[string]string
 }
 
 // Amazon VPC Lattice service
@@ -33948,6 +34168,8 @@ private aws.directconnect.gateway @defaults("id name state") {
   //
   // Null on a gateway that has no prefix pool allocations.
   totalPrefixPoolAllocations int
+  // Tags assigned to the Direct Connect gateway
+  tags map[string]string
 }
 
 // Amazon OpenSearch Serverless
