@@ -3,10 +3,15 @@
 
 name: Weekly release
 
-# Cuts the weekly mql release by pushing the next minor tag (v14.2.0 -> v14.3.0).
-# The tag push starts goreleaser.yml, which builds and publishes the release.
-# The tag is pushed with the deploy key: tags pushed with GITHUB_TOKEN do not
-# trigger workflows.
+# Cuts the weekly mql release (v14.2.0 -> v14.3.0) the way it was cut by hand:
+# it publishes a GitHub release with generated notes, which creates the tag.
+# The tag starts goreleaser.yml, which builds and attaches the artifacts; the
+# published release starts release-providers.yml. A tag alone is not enough:
+# goreleaser would create the release with GITHUB_TOKEN, and events from
+# GITHUB_TOKEN never start release-providers.yml.
+#
+# The release is created with the mondoo-mergebot app token for the same
+# reason: a tag or release made with GITHUB_TOKEN starts no workflow at all.
 #
 # What gets tagged, and why, is decided in .github/scripts/next-minor-release.sh
 # (unit-tested in .github/scripts/tests/).
@@ -33,6 +38,9 @@ permissions:
 env:
   # C07QZDJFF89 == #release-coordination
   SLACK_BOT_CHANNEL_ID: "C07QZDJFF89"
+  # Every run that can tag reports to Slack, scheduled or started by hand.
+  # Dry runs stay quiet.
+  TRIGGER: ${{ github.event_name == 'schedule' && 'scheduled run' || format('started by {0}', github.triggering_actor) }}
 
 jobs:
   weekly-release:
@@ -46,7 +54,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ssh-key: ${{ secrets.CNQUERY_DEPLOY_KEY_PRIV }}
+          persist-credentials: false
           fetch-depth: 0
           ref: main
 
@@ -102,18 +110,32 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: .github/scripts/verify-tested.sh
 
-      - name: Push release tag
+      - name: Generate app token
+        id: app-token
+        if: ${{ steps.next.outputs.skip != 'true' && inputs.dry-run != true }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.MONDOO_MERGEBOT_APP_ID }}
+          private-key: ${{ secrets.MONDOO_MERGEBOT_APP_PRIVATE_KEY }}
+
+      - name: Publish the release
         id: tag
         if: ${{ steps.next.outputs.skip != 'true' && inputs.dry-run != true }}
         env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          PREV: ${{ steps.next.outputs.prev }}
           NEXT: ${{ steps.next.outputs.next }}
           SHA: ${{ steps.next.outputs.sha }}
         run: |
-          git tag --no-sign "$NEXT" "$SHA"
-          git push origin "refs/tags/$NEXT"
+          gh release create "$NEXT" \
+            --target "$SHA" \
+            --title "$NEXT" \
+            --generate-notes \
+            --notes-start-tag "$PREV"
 
       - name: Notify Slack, released
-        if: ${{ github.event_name == 'schedule' && steps.tag.outcome == 'success' }}
+        if: ${{ steps.tag.outcome == 'success' }}
         uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
           method: chat.postMessage
@@ -127,14 +149,14 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": ":rocket: Weekly release: tagged <${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.next.outputs.next }}|${{ steps.next.outputs.next }}> on `${{ steps.next.outputs.base }}` (<${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.next.outputs.sha }}|${{ steps.next.outputs.commits }} commits> since ${{ steps.next.outputs.prev }})\nFollow the <${{ github.server_url }}/${{ github.repository }}/actions/workflows/goreleaser.yml|goreleaser runs>."
+                    "text": ":rocket: Weekly release: tagged <${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.next.outputs.next }}|${{ steps.next.outputs.next }}> on `${{ steps.next.outputs.base }}` (<${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.next.outputs.sha }}|${{ steps.next.outputs.commits }} commits> since ${{ steps.next.outputs.prev }})\n(${{ env.TRIGGER }})\nFollow the <${{ github.server_url }}/${{ github.repository }}/actions/workflows/goreleaser.yml|goreleaser runs>."
                   }
                 }
               ]
             }
 
       - name: Notify Slack, nothing to release
-        if: ${{ github.event_name == 'schedule' && steps.next.outputs.skip == 'true' }}
+        if: ${{ steps.next.outputs.skip == 'true' && inputs.dry-run != true }}
         uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
           method: chat.postMessage
@@ -148,14 +170,14 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": ":zzz: Weekly release skipped: nothing new on `${{ steps.next.outputs.base }}` since ${{ steps.next.outputs.prev }}."
+                    "text": ":zzz: Weekly release skipped: nothing new on `${{ steps.next.outputs.base }}` since ${{ steps.next.outputs.prev }} (${{ env.TRIGGER }})."
                   }
                 }
               ]
             }
 
       - name: Notify Slack, failed
-        if: ${{ github.event_name == 'schedule' && failure() }}
+        if: ${{ failure() && inputs.dry-run != true }}
         uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
         with:
           method: chat.postMessage
@@ -169,7 +191,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": ":x: Weekly release failed. See the <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|workflow run>."
+                    "text": ":x: Weekly release failed. See the <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|workflow run> (${{ env.TRIGGER }})."
                   }
                 }
               ]
