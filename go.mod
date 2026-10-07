@@ -150,7 +150,6 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.54.0 // indirect
 	github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29 // indirect
 	github.com/Microsoft/hcsshim v0.14.0-rc.1 // indirect
-	github.com/Microsoft/hcsshim v0.14.0-rc.1 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/anchore/go-struct-converter v0.1.0 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
