@@ -224,12 +224,13 @@ func discoverLegacy(runtime *plugin.Runtime, conn shared.Connection, invConfig *
 		return nil, err
 	}
 
-	kyvernoNamespaceDiscovery := stringx.ContainsAnyOf(invConfig.Discover.Targets, DiscoveryKyverno) && (len(nsFilter.include) > 0 || len(nsFilter.exclude) > 0)
+	kyvernoNamespaceDiscovery := stringx.ContainsAnyOf(invConfig.Discover.Targets, DiscoveryKyverno) && (len(nsFilter.include) > 0 || len(nsFilter.exclude) > 0 || labelFilters.HasNamespaceSelector())
 	if resFilters.IsEmpty() {
 		if kyvernoNamespaceDiscovery {
 			for _, ns := range nss {
 				nsConfig := invConfig.Clone(inventory.WithoutDiscovery(), inventory.WithParentConnectionId(invConfig.Id))
 				nsConfig.Options[shared.OPTION_NAMESPACE] = ns.Name
+				ns.Connections = []*inventory.Config{nsConfig}
 				ns.Connections = []*inventory.Config{nsConfig}
 			}
 		}
@@ -330,7 +331,7 @@ func discoverClusterStage(runtime *plugin.Runtime, conn shared.Connection, invCo
 	// IDs → skip" logic in AssetExplorer/scanner prevents them from being
 	// scanned or added to the progress bar. They are still emitted so that
 	// AssetExplorer connects to them (triggering stage 2 workload discovery).
-	kyvernoNamespaceDiscovery := stringx.ContainsAnyOf(invConfig.Discover.Targets, DiscoveryKyverno) && (len(nsFilter.include) > 0 || len(nsFilter.exclude) > 0)
+	kyvernoNamespaceDiscovery := stringx.ContainsAnyOf(invConfig.Discover.Targets, DiscoveryKyverno) && (len(nsFilter.include) > 0 || len(nsFilter.exclude) > 0 || labelFilters.HasNamespaceSelector())
 	nsIsScannable := stringx.ContainsAnyOf(invConfig.Discover.Targets,
 		DiscoveryNamespaces, DiscoveryAuto, DiscoveryAll) || kyvernoNamespaceDiscovery
 
@@ -1695,7 +1696,9 @@ func newFilterOpts(include, exclude []string) (FilterOpts, error) {
 // Empty, multi-namespace, or wildcard filters fall through to cluster-stage discovery.
 func namespaceStageName(cfg *inventory.Config) (string, bool) {
 	namespaces := splitFilterValues(cfg.Options[shared.OPTION_NAMESPACE])
-	if len(namespaces) != 1 || strings.ContainsAny(namespaces[0], `*?[]{}\`) {
+	// Namespace filters use glob syntax; braces are included conservatively for
+	// compatibility with shell-style patterns and the backslash is literal.
+	if len(namespaces) != 1 || strings.ContainsAny(namespaces[0], "*?[]{}\\") {
 		return "", false
 	}
 	return namespaces[0], true
