@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,7 @@ import (
 	"go.mondoo.com/mql/llx"
 	"go.mondoo.com/mql/providers-sdk/v1/plugin"
 	"go.mondoo.com/mql/providers-sdk/v1/util/convert"
+	"go.mondoo.com/mql/providers/os/connection/shared"
 )
 
 const defaultKubeletConfig = "/var/lib/kubelet/config.yaml"
@@ -342,11 +344,16 @@ func (m *mqlKubelet) version() (string, error) {
 	if exe.Data == "" {
 		return "", nil
 	}
+	conn := m.MqlRuntime.Connection.(shared.Connection)
+	exePath := resolveKubeletExecutable(exe.Data, func(p string) bool {
+		_, err := conn.FileSystem().Stat(p)
+		return err == nil
+	})
 
 	// Single-quote the executable path so paths with spaces or shell
 	// metacharacters are passed through unchanged; embedded single quotes
 	// are escaped the POSIX way ('\'').
-	quotedExe := "'" + strings.ReplaceAll(exe.Data, "'", `'\''`) + "'"
+	quotedExe := "'" + strings.ReplaceAll(exePath, "'", `'\''`) + "'"
 	o, err := CreateResource(m.MqlRuntime, "command", map[string]*llx.RawData{
 		"command": llx.StringData(quotedExe + " --version"),
 	})
@@ -360,6 +367,30 @@ func (m *mqlKubelet) version() (string, error) {
 		return "", errors.New("failed to determine kubelet version: " + cmd.GetStderr().Data)
 	}
 	return parseKubeletVersion(cmd.GetStdout().Data), nil
+}
+
+// kubeletInstallPaths are kubelet binaries that are off PATH, in directories
+// only root can write. RKE2 keeps kubelet in /var/lib/rancher/rke2/bin.
+var kubeletInstallPaths = []string{"/var/lib/rancher/rke2/bin/kubelet"}
+
+// resolveKubeletExecutable returns the path to run for kubelet --version. On
+// Linux the process list reports the bare name from /proc/<pid>/status, which
+// only runs when kubelet is on PATH, so a bare name is looked up in
+// kubeletInstallPaths and kept when none exists.
+//
+// The process's own binary (/proc/<pid>/exe) is deliberately not used: the
+// kubelet process is matched by name, any user can start a process named
+// kubelet, and its binary would then run with sudo.
+func resolveKubeletExecutable(exe string, exists func(path string) bool) string {
+	if path.IsAbs(exe) {
+		return exe
+	}
+	for _, p := range kubeletInstallPaths {
+		if exists(p) {
+			return p
+		}
+	}
+	return exe
 }
 
 func getKubeletProcess(runtime *plugin.Runtime) (*mqlProcess, error) {
