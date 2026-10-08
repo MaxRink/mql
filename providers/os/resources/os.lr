@@ -7524,8 +7524,8 @@ private docker.file.stage @defaults("from.name") {
   onbuild []docker.file.onbuild
   // Whether this stage runs as root
   //
-  // True when the stage's last `USER` instruction resolves to UID 0 (`0` or
-  // `root`), or is set from a variable that has no value in the Dockerfile,
+  // True when the stage's last `USER` instruction resolves to UID 0 (`root`,
+  // or a number equal to 0 such as `0` or `00`), or is set from a variable that has no value in the Dockerfile,
   // such as an `ARG` without a default. A stage without `USER` has the user
   // of the stage it is built from (`FROM <stage>`). A stage built from an
   // image and without `USER` counts as root, because the image's user is not
@@ -7643,8 +7643,9 @@ private docker.file.user @defaults("user") @context("file.context") {
   group string
   // Whether the declared user is root
   //
-  // True when `user` is `0` or `root`, or is set from a variable that has no
-  // value in the Dockerfile. The group is not considered.
+  // True when `user` is `root` or a number equal to 0 (such as `0` or `00`),
+  // or is set from a variable that has no value in the Dockerfile. The group
+  // is not considered.
   isRoot bool
 }
 
@@ -7936,10 +7937,15 @@ private docker.file.onbuild @defaults("expression") @context("file.context") {
 // Single Docker image on the host
 //
 // An image stored on the Docker host, with its content-addressable `id`, the
-// `tags` and `repoDigests` it is known by, its `size`, and its `labels`. Use
-// it to inventory images and check provenance, for example
+// `tags` and `repoDigests` it is known by, its `size`, and its `labels`. The
+// image configuration reports what a container started from it runs: `user`
+// and `runsAsRoot`, `entrypoint` and `cmd`, `exposedPorts`, the health check,
+// and the platform (`os`, `architecture`, `variant`) and build time
+// (`createdAt`). `containers` lists the containers created from it. Use it to
+// inventory images and check provenance, for example
 // `docker.images.where(tags.none(_ == /latest/))` to find images not pinned to
-// a floating tag.
+// a floating tag, or `docker.images.where(runsAsRoot)` to find images whose
+// containers run as root unless told otherwise.
 docker.image {
   // Image ID, the content-addressable digest of the image config
   id string
@@ -7951,6 +7957,60 @@ docker.image {
   tags []string
   // Image labels, as key/value pairs
   labels map[string]string
+  // Time the image was built, null when the image does not record it
+  createdAt() time
+  // Author recorded in the image, for example by `MAINTAINER`
+  author() string
+  // Operating system the image targets (e.g., linux, windows)
+  os() string
+  // Processor architecture the image targets (e.g., amd64, arm64)
+  architecture() string
+  // Processor architecture variant (e.g., v7, v8), empty when the image sets none
+  variant() string
+  // Account a container started from the image runs as, empty when it runs as root
+  //
+  // The image's `USER`, for example `1000:1000` or `nginx`. A container can
+  // override it, which `docker.container.user` reports.
+  user() string
+  // Whether a container started from the image runs as root
+  //
+  // True when `user` is empty, or its user part is `root` or a number equal to
+  // 0 (such as `0` or `00`). A name other than `root` counts as not root, even
+  // when the image's /etc/passwd gives it UID 0.
+  runsAsRoot() bool
+  // Command the image runs, prefixed to `cmd` (e.g., ["/docker-entrypoint.sh"])
+  entrypoint() []string
+  // Default arguments to `entrypoint`, or the command when there is no entrypoint
+  cmd() []string
+  // Working directory of the image's command, empty when the image sets none
+  workingDir() string
+  // Ports the image declares with `EXPOSE`, as `port/protocol` (e.g., 80/tcp)
+  //
+  // Exposing a port documents it, it does not publish it on the host; see
+  // `docker.container.ports` for what is published.
+  exposedPorts() []string
+  // Whether the image defines a health check
+  //
+  // False when it defines none, or when it disables the one of its base image
+  // with `HEALTHCHECK NONE`.
+  hasHealthcheck() bool
+  // Health check command, for example ["CMD-SHELL", "curl -f http://localhost/"]
+  //
+  // The first entry is `CMD` or `CMD-SHELL`, or `NONE` when the image disables
+  // its base image's health check. Empty when there is none.
+  healthcheckTest() []string
+  // Seconds between health checks, null when the image has no health check
+  //
+  // Reports the engine default of 30 when the health check does not set one.
+  healthcheckInterval() int
+  // Digests of the image's filesystem layers, base layer first
+  //
+  // The digests of the uncompressed layer contents (diff IDs), which stay the
+  // same whichever registry or compression the image came from, so a layer of
+  // a known base image can be found in images built from it.
+  layers() []string
+  // Containers created from the image, running or stopped
+  containers() []docker.container
 }
 
 // Single Docker container on the host
@@ -8302,6 +8362,12 @@ private docker.daemon.ulimit @defaults("name soft hard") {
 containerd {
   // All containers across every containerd namespace
   containers() []containerd.container
+  // All images across every containerd namespace
+  //
+  // Kubernetes keeps its images in the `k8s.io` namespace. An image stored
+  // under several references is listed once for each, for example
+  // `containerd.images.where(namespace == "k8s.io" && runsAsRoot) { name }`.
+  images() []containerd.image
   // containerd version (for example "2.2.0")
   //
   // Reported by the containerd binary. Null when it cannot be run, as on an
@@ -8556,6 +8622,75 @@ containerd.container @defaults("id status") {
   cpuShares() int
   // Maximum number of processes in the container, null when unlimited
   pidsLimit() int
+  // Image the container was created from
+  //
+  // The image of `image` in the container's namespace. Null when it is no
+  // longer stored.
+  sourceImage() containerd.image
+}
+
+// Image stored by containerd
+//
+// An image reference in a containerd namespace, with the `digest` and
+// `mediaType` of its manifest or index, the `platforms` it is published for,
+// and its `labels`. The configuration fields come from the image built for
+// the host's platform: `configDigest` (the image ID Kubernetes reports), `size`, `createdAt`,
+// `os`, `architecture`, `user` and `runsAsRoot`, `entrypoint`, `cmd`,
+// `exposedPorts`, and the `layers`. They are null when containerd does not
+// store that image's content, for example
+// `containerd.images.where(runsAsRoot == false) { name user }`.
+containerd.image @defaults("name namespace") {
+  // Image reference (for example "docker.io/library/alpine:3.22")
+  name string
+  // containerd namespace the image belongs to (for example "k8s.io")
+  namespace string
+  // Digest of the image's manifest or, for a multi-platform image, its index
+  digest string
+  // Media type of the manifest or index (for example "application/vnd.oci.image.index.v1+json")
+  mediaType string
+  // Platforms the image is published for (for example "linux/amd64", "linux/arm64/v8")
+  platforms []string
+  // Image labels (for example "io.cri-containerd.pinned")
+  labels map[string]string
+  // Digest of the image configuration, which is the image ID Kubernetes and crictl report
+  configDigest() string
+  // Size in bytes of the image's configuration and compressed layers
+  size() int
+  // Time the image was built, null when the image does not record it
+  createdAt() time
+  // Operating system the image targets (for example "linux")
+  os() string
+  // Processor architecture the image targets (for example "amd64", "arm64")
+  architecture() string
+  // Processor architecture variant (for example "v7", "v8"); empty when the image sets none
+  variant() string
+  // Account a container started from the image runs as, empty when it runs as root
+  //
+  // The image's `USER`, for example `65535:65535` or `nonroot`. Kubernetes
+  // overrides it with the pod's `runAsUser`, which `containerd.container.uid`
+  // reports.
+  user() string
+  // Whether a container started from the image runs as root
+  //
+  // True when `user` is empty, or its user part is `root` or a number equal to
+  // 0 (such as `0` or `00`). A name other than `root` counts as not root, even
+  // when the image's /etc/passwd gives it UID 0.
+  runsAsRoot() bool
+  // Command the image runs, prefixed to `cmd`
+  entrypoint() []string
+  // Default arguments to `entrypoint`, or the command when there is no entrypoint
+  cmd() []string
+  // Working directory of the image's command, empty when the image sets none
+  workingDir() string
+  // Ports the image declares with `EXPOSE`, as `port/protocol` (for example "53/udp")
+  exposedPorts() []string
+  // Digests of the image's filesystem layers, base layer first
+  //
+  // The digests of the uncompressed layer contents (diff IDs), the same
+  // whichever registry or compression the image came from.
+  layers() []string
+  // Containers created from the image, running or stopped
+  containers() []containerd.container
 }
 
 // Mount of a containerd container
