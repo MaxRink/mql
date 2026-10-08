@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -224,4 +226,236 @@ func TestEveryFixtureIsValidJSON(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, json.Valid(data), "%s is not valid JSON", e.Name())
 	}
+}
+
+func TestEachServiceAnswersOnlyItsOwnAPIVersion(t *testing.T) {
+	srv := New(t)
+
+	cases := []struct {
+		path    string
+		version string
+	}{
+		{path: "/advsec" + base + "/_apis/no-such-route", version: AdvSecAPIVersion},
+		{path: "/vssps" + base + "/_apis/no-such-route", version: APIVersion},
+		{path: base + "/scan-test/_apis/distributedtask/no-such-route", version: PreviewAPIVersion},
+		{path: base + "/scan-test/_apis/pipelines/no-such-route", version: PreviewAPIVersion},
+	}
+	for _, tc := range cases {
+		for _, v := range []string{APIVersion, AdvSecAPIVersion, PreviewAPIVersion} {
+			res, _ := get(t, srv, tc.path+"?api-version="+v, basic(PAT))
+			if v == tc.version {
+				assert.Equal(t, http.StatusNotFound, res.StatusCode, "%s with %s reaches the router", tc.path, v)
+			} else {
+				assert.Equal(t, http.StatusBadRequest, res.StatusCode, "%s refuses %s", tc.path, v)
+			}
+		}
+	}
+}
+
+func TestConnectionDataIsServedOnlyByTheMainHost(t *testing.T) {
+	srv := New(t)
+
+	res, _ := get(t, srv, "/vssps"+base+"/_apis/connectionData", basic(PAT))
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "an unversioned call to another host is refused")
+}
+
+func TestRefsKeepOnlyTheFilteredKind(t *testing.T) {
+	srv := New(t)
+	refs := base + "/scan-test/_apis/git/repositories/" + RepoIacID + "/refs"
+
+	type list struct {
+		Value []struct {
+			Name string `json:"name"`
+		} `json:"value"`
+	}
+	res, body := get(t, srv, refs+"?filter=heads/&api-version="+APIVersion, basic(PAT))
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var heads list
+	require.NoError(t, json.Unmarshal([]byte(body), &heads))
+	require.Len(t, heads.Value, 2)
+	for _, r := range heads.Value {
+		assert.True(t, strings.HasPrefix(r.Name, "refs/heads/"), r.Name)
+	}
+
+	_, body = get(t, srv, refs+"?api-version="+APIVersion, basic(PAT))
+	var all list
+	require.NoError(t, json.Unmarshal([]byte(body), &all))
+	assert.Len(t, all.Value, 3, "without a filter the tag is listed too")
+}
+
+func TestDenyAnswersForbiddenOnlyForTheMatchingPath(t *testing.T) {
+	srv := New(t)
+	srv.Deny("/refs")
+	repo := base + "/scan-test/_apis/git/repositories/" + RepoIacID
+
+	res, _ := get(t, srv, repo+"/refs?api-version="+APIVersion, basic(PAT))
+	assert.Equal(t, http.StatusForbidden, res.StatusCode)
+	res, _ = get(t, srv, repo+"/items?api-version="+APIVersion, basic(PAT))
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+}
+
+func TestAccessControlListsAnswerOnlyTheAskedToken(t *testing.T) {
+	srv := New(t)
+	acls := base + "/_apis/accesscontrollists/" + gitNamespace + "?api-version=" + APIVersion + "&token="
+
+	type list struct {
+		Value []struct {
+			Token string `json:"token"`
+		} `json:"value"`
+	}
+	read := func(query string) list {
+		t.Helper()
+		res, body := get(t, srv, acls+query, basic(PAT))
+		require.Equal(t, http.StatusOK, res.StatusCode)
+		var l list
+		require.NoError(t, json.Unmarshal([]byte(body), &l))
+		return l
+	}
+
+	project := "repoV2/" + ProjectScanTestID
+	one := read(url.QueryEscape(project) + "&recurse=false")
+	require.Len(t, one.Value, 1)
+	assert.Equal(t, project, one.Value[0].Token)
+
+	assert.Len(t, read(url.QueryEscape(project)+"&recurse=true").Value, 3, "recurse adds the repository lists")
+	assert.Empty(t, read(url.QueryEscape("repoV2/"+ProjectLegacyAppsID)+"&recurse=false").Value, "a token with no list")
+}
+
+func TestIdentitiesFindAGroupByItsName(t *testing.T) {
+	srv := New(t)
+	search := "/vssps" + base + "/_apis/identities?api-version=" + APIVersion + "&searchFilter=General&queryMembership=None&filterValue="
+
+	type list struct {
+		Value []struct {
+			Descriptor string `json:"descriptor"`
+		} `json:"value"`
+	}
+	res, body := get(t, srv, search+url.QueryEscape(`[scan-test]\contributors`), basic(PAT))
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var found list
+	require.NoError(t, json.Unmarshal([]byte(body), &found))
+	require.Len(t, found.Value, 1)
+	assert.Equal(t, ContributorsDescriptor, found.Value[0].Descriptor)
+
+	_, body = get(t, srv, search+url.QueryEscape(`[legacy-apps]\Contributors`), basic(PAT))
+	var none list
+	require.NoError(t, json.Unmarshal([]byte(body), &none))
+	assert.Empty(t, none.Value)
+}
+
+func TestDropAccessControlListAnswersNoListForThatTokenOnly(t *testing.T) {
+	srv := New(t)
+	project := "repoV2/" + ProjectScanTestID
+	srv.DropAccessControlList(project)
+	acls := base + "/_apis/accesscontrollists/" + gitNamespace + "?api-version=" + APIVersion + "&recurse=false&token="
+
+	_, body := get(t, srv, acls+url.QueryEscape(project), basic(PAT))
+	assert.JSONEq(t, `{"count":0,"value":[]}`, body)
+
+	_, body = get(t, srv, acls+url.QueryEscape(project+"/"+RepoIacID), basic(PAT))
+	assert.Contains(t, body, project+"/"+RepoIacID, "the repository list is still served")
+}
+
+func TestAdvancedSecurityIsOffUntilEnabled(t *testing.T) {
+	srv := New(t)
+	repo := "/advsec" + base + "/scan-test/_apis/"
+	enablement := repo + "management/repositories/" + RepoAppID + "/enablement?api-version=" + AdvSecAPIVersion
+	alerts := repo + "alert/repositories/" + RepoAppID + "/alerts?api-version=" + AdvSecAPIVersion
+
+	res, body := get(t, srv, enablement, basic(PAT))
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Contains(t, body, `"advSecEnabled":false`)
+	res, body = get(t, srv, alerts, basic(PAT))
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+	assert.Contains(t, body, "VS2150009")
+
+	srv.EnableAdvancedSecurity(RepoAppID)
+	_, body = get(t, srv, enablement, basic(PAT))
+	assert.Contains(t, body, `"advSecEnabled":true`)
+	res, body = get(t, srv, alerts, basic(PAT))
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Contains(t, body, `"alertType": "secret"`)
+}
+
+func TestHideItemAnswers404ByPathAndKeepsTheEntryInTheTree(t *testing.T) {
+	srv := New(t)
+	srv.HideItem(RepoAppID, "/azure-pipelines.yml")
+	items := base + "/scan-test/_apis/git/repositories/" + RepoAppID + "/items?api-version=" + APIVersion
+
+	res, body := get(t, srv, items+"&path=%2Fazure-pipelines.yml", basic(PAT))
+	assert.Equal(t, http.StatusNotFound, res.StatusCode)
+	assert.Contains(t, body, "TF401174")
+	res, _ = get(t, srv, items+"&path=%2FSECURITY.md", basic(PAT))
+	assert.Equal(t, http.StatusOK, res.StatusCode, "another file is still read")
+	_, body = get(t, srv, items, basic(PAT))
+	assert.Contains(t, body, "/azure-pipelines.yml", "the tree still lists the hidden file")
+}
+
+func TestAnswerAdvancedSecurityOffRefusesOnlyTheMatchingPath(t *testing.T) {
+	srv := New(t)
+	srv.EnableAdvancedSecurity(RepoAppID)
+	srv.AnswerAdvancedSecurityOff("/enablement")
+	repo := "/advsec" + base + "/scan-test/_apis/"
+	enablement := repo + "management/repositories/" + RepoAppID + "/enablement?api-version=" + AdvSecAPIVersion
+	alerts := repo + "alert/repositories/" + RepoAppID + "/alerts?api-version=" + AdvSecAPIVersion
+
+	res, body := get(t, srv, enablement, basic(PAT))
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+	assert.Contains(t, body, "VS2150009")
+	res, _ = get(t, srv, alerts, basic(PAT))
+	assert.Equal(t, http.StatusOK, res.StatusCode, "the alert route is not matched")
+}
+
+func TestServiceHooksListEverySubscriptionOfTheOrganization(t *testing.T) {
+	srv := New(t)
+
+	res, body := get(t, srv, base+"/_apis/hooks/subscriptions?api-version="+APIVersion, basic(PAT))
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Contains(t, body, `"count": 7`)
+}
+
+func TestEnvironmentChecksCarrySettingsOnlyWhenAsked(t *testing.T) {
+	srv := New(t)
+	checks := base + "/legacy-apps/_apis/pipelines/checks/configurations?api-version=" + PreviewAPIVersion + "&resourceType=environment&resourceId=1"
+
+	res, body := get(t, srv, checks, basic(PAT))
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Contains(t, body, `"Approval"`)
+	assert.NotContains(t, body, "requesterCannotBeApprover")
+
+	_, body = get(t, srv, checks+"&%24expand=settings", basic(PAT))
+	assert.Contains(t, body, `"requesterCannotBeApprover":false`)
+
+	res, _ = get(t, srv, base+"/legacy-apps/_apis/pipelines/checks/configurations?api-version="+PreviewAPIVersion, basic(PAT))
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+}
+
+func TestEnvironmentsOfAProjectWithNoneAreEmpty(t *testing.T) {
+	srv := New(t)
+
+	res, body := get(t, srv, base+"/scan-test/_apis/distributedtask/environments?api-version="+PreviewAPIVersion, basic(PAT))
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	assert.Contains(t, body, `"count":0`)
+	_, body = get(t, srv, base+"/legacy-apps/_apis/distributedtask/environments?api-version="+PreviewAPIVersion, basic(PAT))
+	assert.Contains(t, body, `"production"`)
+}
+
+func TestOneItemComesWithItsContentOnlyWhenAsked(t *testing.T) {
+	srv := New(t)
+	items := base + "/scan-test/_apis/git/repositories/" + RepoAppID + "/items?api-version=7.1&$format=json&path="
+
+	res, body := get(t, srv, items+"/Azure-Pipelines.yml&includeContent=true", basic(PAT))
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	var item map[string]any
+	require.NoError(t, json.Unmarshal([]byte(body), &item))
+	assert.Equal(t, "/azure-pipelines.yml", item["path"])
+	assert.Contains(t, item["content"], "AdvancedSecurity-Dependency-Scanning@1")
+
+	res, body = get(t, srv, items+"/azure-pipelines.yml", basic(PAT))
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	assert.NotContains(t, body, `"content"`)
+
+	res, body = get(t, srv, items+"/missing.txt&includeContent=true", basic(PAT))
+	assert.Equal(t, http.StatusNotFound, res.StatusCode)
+	assert.Contains(t, body, "TF401174")
 }

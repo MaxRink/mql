@@ -86,9 +86,19 @@ type Item struct {
 	Path          string `json:"path"`
 	IsFolder      bool   `json:"isFolder"`
 	URL           string `json:"url"`
+	// Content is sent only when one item is read with includeContent=true.
+	Content string `json:"content"`
 }
 
 // IsBlob reports a file entry.
 func (i Item) IsBlob() bool {
 	return !i.IsFolder && strings.EqualFold(i.GitObjectType, "blob")
+}
+
+// Ref is one entry of GET /{project}/_apis/git/repositories/{id}/refs.
+type Ref struct {
+	// Name is the full ref, for example refs/heads/main.
+	Name string `json:"name"`
+	// ObjectID is the commit the ref points at.
+	ObjectID string `json:"objectId"`
 }
