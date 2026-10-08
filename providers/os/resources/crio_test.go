@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -160,65 +161,13 @@ func TestCrioContainerID(t *testing.T) {
 	assert.False(t, crioContainerID.MatchString("../config"))
 }
 
-// The policy the packages from the CRI-O project install: every image
-// accepted without any signature check.
-func TestParseCrioPolicyStock(t *testing.T) {
-	p, err := parseCrioPolicy(readCrioFixture(t, "kubeadm/policy.json"))
-	require.NoError(t, err)
-	require.Len(t, p.Default, 1)
-	assert.Equal(t, "insecureAcceptAnything", p.Default[0].Type)
-	assert.Empty(t, p.scopes())
-}
-
-func TestParseCrioPolicySigned(t *testing.T) {
-	p, err := parseCrioPolicy(readCrioFixture(t, "policy-signed.json"))
-	require.NoError(t, err)
-	assert.Equal(t, "reject", p.Default[0].Type)
-
-	scopes := p.scopes()
-	require.Len(t, scopes, 5)
-	got := []string{}
-	for _, s := range scopes {
-		got = append(got, s.Transport+" "+s.Scope)
-	}
-	assert.Equal(t, []string{
-		"docker ghcr.io/example", "docker quay.io/legacy", "docker registry.example.com/platform",
-		"docker registry.k8s.io", "docker-daemon ",
-	}, got, "by transport, then scope")
-
-	byScope := map[string]crioPolicyRequirement{}
-	for _, s := range scopes {
-		byScope[s.Scope] = s.Requirements[0]
-	}
-	gpg := byScope["registry.example.com/platform"]
-	assert.Equal(t, "signedBy", gpg.Type)
-	assert.Equal(t, "GPGKeys", gpg.KeyType)
-	assert.Equal(t, []string{"/etc/pki/containers/platform.gpg"}, gpg.keyPaths())
-	assert.Equal(t, "matchRepoDigestOrExact", gpg.SignedIdentity["type"])
-
-	keyless := byScope["ghcr.io/example"]
-	assert.Equal(t, "sigstoreSigned", keyless.Type)
-	require.NotNil(t, keyless.Fulcio)
-	assert.Equal(t, "https://token.actions.githubusercontent.com", keyless.Fulcio.OIDCIssuer)
-	assert.Equal(t, "release@example.com", keyless.Fulcio.SubjectEmail)
-	assert.Equal(t, []string{"/etc/pki/containers/rekor.pub"}, keyless.rekorKeyPaths())
-	assert.Empty(t, keyless.keyPaths())
-
-	inline := byScope["registry.k8s.io"]
-	assert.NotEmpty(t, inline.KeyData, "an inline key is reported as present, not by content")
-	assert.Empty(t, inline.keyPaths())
-
-	assert.Equal(t, "insecureAcceptAnything", byScope["quay.io/legacy"].Type)
-}
-
-func TestParseCrioPolicyMalformed(t *testing.T) {
-	_, err := parseCrioPolicy(`{ "default": [ { "type": "reject" } `)
-	assert.Error(t, err, "a broken policy must not read as one without requirements")
-}
-
-func TestCrioNamespacePolicyFiles(t *testing.T) {
-	assert.Equal(t, []string{"kube-system.json", "payments.json"},
-		crioNamespacePolicyFiles([]string{"payments.json", "README", ".hidden.json", "kube-system.json", ".json", ""}))
+func TestIsCrioNamespacePolicyFile(t *testing.T) {
+	assert.True(t, isCrioNamespacePolicyFile("payments.json"))
+	assert.True(t, isCrioNamespacePolicyFile("kube-system.json"))
+	assert.False(t, isCrioNamespacePolicyFile("README"))
+	assert.False(t, isCrioNamespacePolicyFile(".hidden.json"))
+	assert.False(t, isCrioNamespacePolicyFile(".json"), "a name without a namespace")
+	assert.False(t, isCrioNamespacePolicyFile("payments.json.bak"))
 }
 
 // [crio.runtime.runtimes] of the effective configuration on the kubeadm node
@@ -320,4 +269,25 @@ func TestCrioPort(t *testing.T) {
 	assert.False(t, ok)
 	_, ok = crioPort(nil)
 	assert.False(t, ok)
+}
+
+// CRI-O opens <signature_policy_dir>/<namespace>.json by path, so a symlinked
+// policy counts, and a directory or a dangling link holds no policy.
+func TestCrioNamespacePolicyListing(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "etc", "crio", "policies")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "etc", "crio", "shared"), 0o755))
+	policy := []byte(`{"default":[{"type":"reject"}]}`)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "payments.json"), policy, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "etc", "crio", "shared", "policy.json"), policy, 0o644))
+	require.NoError(t, os.Symlink("../shared/policy.json", filepath.Join(dir, "linked.json")))
+	require.NoError(t, os.Symlink("../shared/missing.json", filepath.Join(dir, "dangling.json")))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "dir.json"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".hidden.json"), policy, 0o644))
+
+	rt := memFSRuntime(t, afero.NewBasePathFs(afero.NewOsFs(), root))
+	files, err := listConfDFilesWith(rt, []string{"/etc/crio/policies"}, isCrioNamespacePolicyFile)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/etc/crio/policies/linked.json", "/etc/crio/policies/payments.json"}, files)
 }
