@@ -214,6 +214,7 @@ PROVIDERS := \
 	auth0 \
 	aws \
 	azure \
+	azuredevops \
 	bicep \
 	bitwarden \
 	cassandra \
@@ -360,6 +361,7 @@ providers/test:
 	@$(call testGoModProvider, providers/atlassian)
 	@$(call testGoModProvider, providers/aws)
 	@$(call testGoModProvider, providers/azure)
+	@$(call testGoModProvider, providers/azuredevops)
 	@$(call testGoModProvider, providers/bicep)
 	@$(call testGoModProvider, providers/cloudflare)
 	@$(call testGoModProvider, providers/cloudformation)
