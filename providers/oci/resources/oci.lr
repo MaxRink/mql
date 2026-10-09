@@ -260,6 +260,26 @@ private oci.identity.domain @defaults("name type state") {
   //
   // Null when the domain uses the service default.
   userPrincipalSessionTokenMaxExpiry() int
+  // Whether every user must have a primary email address
+  primaryEmailRequired() bool
+  // Whether users can set a recovery email address
+  userAllowedToSetRecoveryEmail() bool
+  // Whether end users can change their own password in My Profile
+  endUsersCanChangePassword() bool
+  // Whether end users can change their own security settings in My Profile
+  endUsersCanUpdateSecuritySettings() bool
+  // Whether end users can manage their own capabilities, such as API keys and auth tokens, in My Profile
+  endUsersCanManageCapabilities() bool
+  // Factors users can recover their account with, for example email or sms
+  accountRecoveryFactors() []string
+  // Incorrect recovery attempts before the account is locked
+  accountRecoveryMaxIncorrectAttempts() int
+  // How long an account stays locked after too many incorrect recovery attempts, in minutes
+  accountRecoveryLockoutDuration() int
+  // Dynamic resource groups, which grant resources such as instances the permissions of a group
+  dynamicResourceGroups() []oci.identity.domain.dynamicResourceGroup
+  // Social identity providers users can sign in with, such as Google or Facebook
+  socialIdentityProviders() []oci.identity.domain.socialIdentityProvider
   // Domain lifecycle state (CREATING, ACTIVE, DELETING, INACTIVE, FAILED)
   state string
   // Domain creation time
@@ -431,6 +451,8 @@ private oci.identity.domain.user @defaults("userName active mfaStatus") {
   // one inherited through nesting, which is what decides whether removing the
   // user from a group actually revokes the access it grants.
   groupMemberships() []oci.identity.domain.user.groupMembership
+  // API keys, auth tokens, customer secret keys, OAuth 2.0 client credentials, SMTP credentials, and database credentials of the user
+  credentials() []oci.identity.domain.user.credential
   // When the account was created
   created time
 }
@@ -1250,6 +1272,16 @@ oci.compute {
   blockVolumes() []oci.compute.blockVolume
   // Boot volumes
   bootVolumes() []oci.compute.bootVolume
+  // Volume attachments of instances in all compartments
+  volumeAttachments() []oci.compute.volumeAttachment
+  // Block volume backup policies: Oracle-defined (gold, silver, bronze) and custom ones
+  volumeBackupPolicies() []oci.compute.volumeBackupPolicy
+  // Block volume backups in all compartments
+  volumeBackups() []oci.compute.volumeBackup
+  // Boot volume backups in all compartments
+  bootVolumeBackups() []oci.compute.bootVolumeBackup
+  // Volume groups in all compartments
+  volumeGroups() []oci.compute.volumeGroup
 }
 
 // OCI network internet-exposure breakdown
@@ -1453,6 +1485,8 @@ private oci.compute.instance @defaults("name") {
   sourceDetails @maturity("deprecated") dict
   // Boot volume the instance was launched from, when launched from an existing boot volume
   bootVolume() oci.compute.bootVolume
+  // Block volumes attached to the instance, with how each is attached
+  volumeAttachments() []oci.compute.volumeAttachment
   // Image and boot volume the instance was created from at launch
   //
   // Null when the instance was launched from an existing boot volume, in
@@ -1802,6 +1836,14 @@ private oci.compute.blockVolume @defaults("name") {
   sourceVolume() oci.compute.blockVolume
   // OCID of the volume backup this volume was restored from, when restored from a backup
   sourceVolumeBackupId string
+  // Backup policy assigned to the volume; null when the volume is not backed up on a schedule
+  backupPolicy() oci.compute.volumeBackupPolicy
+  // Backups of the volume
+  backups() []oci.compute.volumeBackup
+  // Volume group the volume belongs to; null when it belongs to none
+  volumeGroup() oci.compute.volumeGroup
+  // Attachments of the volume to instances
+  attachments() []oci.compute.volumeAttachment
   // Block volume creation time
   created time
   // Free-form tags for resource management
@@ -1843,6 +1885,12 @@ private oci.compute.bootVolume @defaults("name") {
   state string
   // KMS key for volume encryption
   kmsKey() oci.kms.key
+  // Backup policy assigned to the boot volume; null when it is not backed up on a schedule
+  backupPolicy() oci.compute.volumeBackupPolicy
+  // Backups of the boot volume
+  backups() []oci.compute.bootVolumeBackup
+  // Volume group the boot volume belongs to; null when it belongs to none
+  volumeGroup() oci.compute.volumeGroup
   // Boot volume creation time
   created time
   // Free-form tags for resource management
@@ -1899,6 +1947,18 @@ oci.network {
   virtualCircuits() []oci.network.virtualCircuit
   // FastConnect physical cross-connects
   crossConnects() []oci.network.crossConnect
+  // Cross-connect groups in all compartments, with their MACsec settings
+  crossConnectGroups() []oci.network.crossConnectGroup
+  // DHCP option sets in all compartments
+  dhcpOptionSets() []oci.network.dhcpOptionSet
+  // DRG route tables in all compartments
+  drgRouteTables() []oci.network.drgRouteTable
+  // DRG route distributions in all compartments
+  drgRouteDistributions() []oci.network.drgRouteDistribution
+  // Virtual test access points (traffic mirroring) in all compartments
+  vtaps() []oci.network.vtap
+  // Capture filters of VTAPs and flow logs in all compartments
+  captureFilters() []oci.network.captureFilter
 }
 
 // Oracle Cloud Infrastructure (OCI) public IP address
@@ -2001,8 +2061,10 @@ private oci.network.vcn @defaults("name") {
   // Each labelling as a row carrying its namespace, its definition and whether
   // that namespace enforces or only audits.
   appliedSecurityAttributes() []oci.securityAttributes.applied
-  // Default DHCP options OCID for the VCN
-  defaultDhcpOptionsId string
+  // Default DHCP options OCID
+  //
+  // Deprecated in favor of defaultDhcpOptionSet.
+  defaultDhcpOptionsId @maturity("deprecated") @replaced_by("oci.network.vcn.defaultDhcpOptionSet") string
   // Default route table OCID for the VCN
   //
   // Deprecated in favor of defaultRouteTable.
@@ -2048,6 +2110,12 @@ private oci.network.vcn @defaults("name") {
   natGateways() []oci.network.natGateway
   // VCN flow logs (OCI logs with service=flowlogs whose resource is this VCN)
   flowLogs() []oci.logging.log
+  // Default DHCP option set of the VCN
+  defaultDhcpOptionSet() oci.network.dhcpOptionSet
+  // DHCP option sets of the VCN
+  dhcpOptionSets() []oci.network.dhcpOptionSet
+  // Virtual test access points mirroring traffic of the VCN
+  vtaps() []oci.network.vtap
 }
 
 // Oracle Cloud Infrastructure (OCI) network subnet
@@ -2108,6 +2176,8 @@ private oci.network.subnet @defaults("name") {
   prohibitInternetIngress bool
   // Route table used by this subnet
   routeTable() oci.network.routeTable
+  // DHCP option set the subnet uses
+  dhcpOptionSet() oci.network.dhcpOptionSet
   // Security lists applied to the subnet
   securityLists() []oci.network.securityList
   // Subnet creation time
@@ -2458,6 +2528,10 @@ private oci.network.drg @defaults("name state") {
   attachments() []oci.network.drgAttachment
   // Remote peering connections hosted on the DRG
   remotePeeringConnections() []oci.network.remotePeeringConnection
+  // Route tables of the DRG
+  routeTables() []oci.network.drgRouteTable
+  // Route distributions of the DRG
+  routeDistributions() []oci.network.drgRouteDistribution
   // Free-form tags for resource management
   freeformTags map[string]string
   // Defined tags for governance and cost tracking
@@ -2498,6 +2572,8 @@ private oci.network.drgAttachment @defaults("name networkType state") {
   // CIDR ranges for traffic crossing this attachment. Null when the attachment
   // has no NAT policy.
   natPolicy() oci.network.drgNatPolicy
+  // DRG route table the attachment's traffic is routed with
+  drgRouteTable() oci.network.drgRouteTable
   // Whether original CIDRs are kept alongside translated ones
   //
   // By default only the translated CIDRs of the attachment's NAT rules are
@@ -2941,7 +3017,7 @@ private oci.network.virtualCircuit.crossConnectMapping @defaults("vlan customerB
 //
 // Physical port at a FastConnect location that carries the tenancy's dedicated
 // connectivity. `locationName` and `portName` identify the port,
-// `portSpeedShapeName` its bandwidth, and `crossConnectGroupId` the link
+// `portSpeedShapeName` its bandwidth, and `crossConnectGroup` the link
 // aggregation group when multiple cross-connects are bonded together.
 private oci.network.crossConnect @defaults("name state") {
   // Cross-connect OCID
@@ -2956,8 +3032,12 @@ private oci.network.crossConnect @defaults("name state") {
   portName string
   // Port speed shape name (e.g., 10 Gbps)
   portSpeedShapeName string
-  // OCID of the cross-connect group this cross-connect belongs to, when grouped for link aggregation
-  crossConnectGroupId string
+  // OCID of the cross-connect group
+  //
+  // Deprecated in favor of crossConnectGroup.
+  crossConnectGroupId @maturity("deprecated") @replaced_by("oci.network.crossConnect.crossConnectGroup") string
+  // Cross-connect group the cross-connect belongs to
+  crossConnectGroup() oci.network.crossConnectGroup
   // Lifecycle state (e.g., PENDING_CUSTOMER, PROVISIONING, PROVISIONED, INACTIVE, TERMINATING, TERMINATED)
   state string
   // Creation time
@@ -3089,6 +3169,16 @@ private oci.kms.vault @defaults("name") {
   managementEndpoint string
   // Keys in the vault
   keys() []oci.kms.key
+  // Whether this vault is the primary of a replicated vault; false for a replica
+  isPrimary() bool
+  // Whether the vault can be replicated to another region
+  isVaultReplicable() bool
+  // Cross-region replicas of the vault
+  replicas() []oci.kms.vault.replica
+  // Endpoint URL of the external key manager an EXTERNAL vault holds its keys in; empty for other vault types
+  externalVaultEndpointUrl() string
+  // Vendor of the external key manager, for example Thales; empty for other vault types
+  externalKeyManagerVendor() string
   // Creation time
   created time
   // Free-form tags for resource management
@@ -3286,6 +3376,10 @@ private oci.objectStorage.bucket {
   retentionRules() []oci.objectStorage.retentionRule
   // Pre-authenticated requests granting credential-free access to the bucket or its objects
   preauthenticatedRequests() []oci.objectStorage.preauthenticatedRequest
+  // Object lifecycle rules that archive or delete objects, previous versions, or incomplete uploads
+  lifecycleRules() []oci.objectStorage.bucket.lifecycleRule
+  // Replication policies copying the bucket's objects to buckets in other regions
+  replicationPolicies() []oci.objectStorage.bucket.replicationPolicy
 }
 
 // Oracle Cloud Infrastructure (OCI) Object Storage pre-authenticated request
@@ -3957,6 +4051,8 @@ oci.cloudGuard {
   responderRecipes() []oci.cloudGuard.responderRecipe
   // Sightings, the correlated activity Cloud Guard has observed across the tenancy
   sightings() []oci.cloudGuard.sighting
+  // Managed lists of CIDR blocks, users, groups, regions, and other values that detector rules include or exclude
+  managedLists() []oci.cloudGuard.managedList
 }
 
 // Oracle Cloud Infrastructure (OCI) Cloud Guard target
@@ -3975,6 +4071,12 @@ private oci.cloudGuard.target @defaults("name") {
   state string
   // Number of detector recipes attached to the target
   recipeCount int
+  // Detector recipes the target applies
+  detectorRecipes() []oci.cloudGuard.detectorRecipe
+  // Responder recipes the target applies
+  responderRecipes() []oci.cloudGuard.responderRecipe
+  // Compartments that inherit the target's monitoring
+  inheritedByCompartments() []oci.compartment
   // Target creation time
   created time
   // Free-form tags for resource management
@@ -4870,6 +4972,8 @@ private oci.bastion.instance @defaults("name") {
   maxSessionTtlInSeconds() int
   // Maximum number of concurrent sessions
   maxSessionsAllowed() int
+  // Sessions of the bastion, active and past
+  sessions() []oci.bastion.session
   // Fixed private IP addresses the bastion connects from
   //
   // The jump-host addresses that appear as the source of bastion traffic, for
@@ -12746,4 +12850,676 @@ private oci.osManagementHub.managedInstance @defaults("name status osFamily") {
   created() time
   // When the managed instance was last updated
   timeUpdated() time
+}
+
+// Oracle Cloud Infrastructure (OCI) volume attachment
+//
+// An attachment of a block volume to a Compute instance, keyed by its OCID,
+// with the attachment type (iscsi, paravirtualized, emulated), whether it is
+// read-only or shareable, in-transit encryption, and CHAP and multipath
+// settings. Use it to verify that every attached volume encrypts its data in
+// transit. The CHAP secret is never read.
+private oci.compute.volumeAttachment @defaults("name attachmentType state") {
+  // Volume attachment OCID
+  id string
+  // Volume attachment display name
+  name string
+  // Compartment containing the attachment
+  compartment() oci.compartment
+  // Attachment type: iscsi, paravirtualized, or emulated
+  attachmentType string
+  // Lifecycle state: ATTACHING, ATTACHED, DETACHING, or DETACHED
+  state string
+  // Availability domain of the instance
+  availabilityDomain string
+  // Device path the volume is attached at, for example /dev/oracleoci/oraclevdb
+  device string
+  // Whether the volume is attached read-only
+  isReadOnly bool
+  // Whether the volume can be attached to more than one instance
+  isShareable bool
+  // Whether paravirtualized in-transit encryption is enabled between the instance and the volume
+  isPvEncryptionInTransitEnabled bool
+  // In-transit encryption type of an iSCSI attachment: NONE or BM_ENCRYPTION_IN_TRANSIT; empty for other attachment types
+  encryptionInTransitType string
+  // Whether the iSCSI attachment authenticates with CHAP; false for other attachment types
+  chapEnabled bool
+  // Whether the attachment is multipath
+  isMultipath bool
+  // Whether the volume was created when the instance was launched
+  isVolumeCreatedDuringLaunch bool
+  // Attachment creation time
+  created time
+  // Instance the volume is attached to
+  instance() oci.compute.instance
+  // Attached block volume
+  volume() oci.compute.blockVolume
+}
+
+// Oracle Cloud Infrastructure (OCI) volume backup policy
+//
+// A schedule of block and boot volume backups, keyed by its OCID: one of
+// Oracle's predefined policies (gold, silver, bronze) or a custom one, with
+// its schedules, their retention, and the region backups are copied to. Use
+// it to verify that volumes are backed up and that backups are kept long
+// enough and copied out of the region.
+private oci.compute.volumeBackupPolicy @defaults("name") {
+  // Backup policy OCID
+  id string
+  // Backup policy display name
+  name string
+  // Compartment containing the policy; null for Oracle's predefined policies
+  compartment() oci.compartment
+  // Whether this is one of Oracle's predefined policies
+  isOracleDefined bool
+  // Region backups are copied to; empty when they are not copied
+  destinationRegion string
+  // Backup schedules
+  schedules() []oci.compute.volumeBackupPolicy.schedule
+  // Policy creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) volume backup schedule
+private oci.compute.volumeBackupPolicy.schedule @defaults("backupType period retentionDays") {
+  // Backup type: FULL or INCREMENTAL
+  backupType string
+  // How often a backup is taken: ONE_HOUR, ONE_DAY, ONE_WEEK, ONE_MONTH, or ONE_YEAR
+  period string
+  // How long backups are kept, in days
+  retentionDays int
+  // Hour of the day the backup is taken, 0 to 23; null when not set
+  hourOfDay int
+  // Day of the week the backup is taken, for example MONDAY; empty when not set
+  dayOfWeek string
+  // Day of the month the backup is taken; null when not set
+  dayOfMonth int
+  // Month the backup is taken, for example JANUARY; empty when not set
+  month string
+  // Time zone of the schedule: UTC or REGIONAL_DATA_CENTER_TIME
+  timeZone string
+  // Whether backups made by the schedule cannot be deleted
+  isPreventDeletionEnabled bool
+  // Whether the retention of backups made by the schedule is locked
+  isRetentionLockEnabled bool
+}
+
+// Oracle Cloud Infrastructure (OCI) block volume backup
+//
+// A backup of a block volume, keyed by its OCID, with its type (full or
+// incremental), whether it was taken manually or by a policy, its size, the
+// KMS key protecting it, when it expires, and deletion and retention locks.
+private oci.compute.volumeBackup @defaults("name type sourceType state") {
+  // Backup OCID
+  id string
+  // Backup display name
+  name string
+  // Compartment containing the backup
+  compartment() oci.compartment
+  // Backup type: FULL or INCREMENTAL
+  type string
+  // How the backup was taken: MANUAL or SCHEDULED
+  sourceType string
+  // Lifecycle state, for example AVAILABLE
+  state string
+  // Size of the backed-up volume in GBs
+  sizeInGBs int
+  // Storage the backup uses that no other backup shares, in GBs
+  uniqueSizeInGBs int
+  // KMS key encrypting the backup; null when Oracle manages the key
+  kmsKey() oci.kms.key
+  // Backed-up block volume; null when it no longer exists
+  volume() oci.compute.blockVolume
+  // Time the backup expires; null when it does not expire
+  expirationTime time
+  // Time the backup's retention lock expires; null without a retention lock
+  retentionExpiresAt time
+  // Whether the backup cannot be deleted
+  isPreventDeletionEnabled bool
+  // Whether the backup's retention is locked
+  isRetentionLockEnabled bool
+  // Backup creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) boot volume backup
+//
+// A backup of a boot volume, keyed by its OCID, with its type (full or
+// incremental), whether it was taken manually or by a policy, its size, the
+// KMS key protecting it, when it expires, and deletion and retention locks.
+private oci.compute.bootVolumeBackup @defaults("name type sourceType state") {
+  // Backup OCID
+  id string
+  // Backup display name
+  name string
+  // Compartment containing the backup
+  compartment() oci.compartment
+  // Backup type: FULL or INCREMENTAL
+  type string
+  // How the backup was taken: MANUAL or SCHEDULED
+  sourceType string
+  // Lifecycle state, for example AVAILABLE
+  state string
+  // Size of the backed-up boot volume in GBs
+  sizeInGBs int
+  // Storage the backup uses that no other backup shares, in GBs
+  uniqueSizeInGBs int
+  // KMS key encrypting the backup; null when Oracle manages the key
+  kmsKey() oci.kms.key
+  // Backed-up boot volume; null when it no longer exists
+  bootVolume() oci.compute.bootVolume
+  // Time the backup expires; null when it does not expire
+  expirationTime time
+  // Time the backup's retention lock expires; null without a retention lock
+  retentionExpiresAt time
+  // Whether the backup cannot be deleted
+  isPreventDeletionEnabled bool
+  // Whether the backup's retention is locked
+  isRetentionLockEnabled bool
+  // Backup creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) volume group
+//
+// A group of block and boot volumes backed up and cloned together, keyed by
+// its OCID, with its member volumes and its backup policy.
+private oci.compute.volumeGroup @defaults("name state") {
+  // Volume group OCID
+  id string
+  // Volume group display name
+  name string
+  // Compartment containing the volume group
+  compartment() oci.compartment
+  // Availability domain of the volume group
+  availabilityDomain string
+  // Lifecycle state, for example AVAILABLE
+  state string
+  // Total size of the group's volumes in GBs
+  sizeInGBs int
+  // Whether a cloned group's data has finished copying from the source
+  isHydrated bool
+  // Block volumes in the group
+  blockVolumes() []oci.compute.blockVolume
+  // Boot volumes in the group
+  bootVolumes() []oci.compute.bootVolume
+  // Backup policy assigned to the group; null when the group is not backed up on a schedule
+  backupPolicy() oci.compute.volumeBackupPolicy
+  // Volume group creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) DHCP option set
+//
+// The DHCP options a VCN's subnets hand out, keyed by its OCID: which DNS
+// resolver instances use (the VCN's Internet and VCN resolver or custom DNS
+// servers), the custom servers, and the search domains. Use it to find
+// subnets whose instances resolve names through servers outside OCI.
+private oci.network.dhcpOptionSet @defaults("name serverType") {
+  // DHCP option set OCID
+  id string
+  // DHCP option set display name
+  name string
+  // Compartment containing the option set
+  compartment() oci.compartment
+  // VCN the option set belongs to
+  vcn() oci.network.vcn
+  // Lifecycle state, for example AVAILABLE
+  state string
+  // DNS resolver type: VcnLocal, VcnLocalPlusInternet, or CustomDnsServer
+  serverType string
+  // Custom DNS servers; empty unless serverType is CustomDnsServer
+  customDnsServers []string
+  // Search domains appended to unqualified names
+  searchDomains []string
+  // How the search domain is set: NONE, SUBNET_DOMAIN, VCN_DOMAIN, or CUSTOM_DOMAIN
+  domainNameType string
+  // Option set creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) DRG route table
+//
+// A route table of a dynamic routing gateway, keyed by its OCID, with its
+// static and dynamic rules, the route distribution it imports routes from,
+// and whether equal-cost multipath is enabled. Use it to review which
+// networks a DRG attachment can reach.
+private oci.network.drgRouteTable @defaults("name") {
+  // DRG route table OCID
+  id string
+  // DRG route table display name
+  name string
+  // Compartment containing the route table
+  compartment() oci.compartment
+  // DRG the route table belongs to
+  drg() oci.network.drg
+  // Lifecycle state, for example AVAILABLE
+  state string
+  // Whether equal-cost multipath routing is enabled
+  isEcmpEnabled bool
+  // Route distribution the table imports dynamic routes from; null when it imports none
+  importRouteDistribution() oci.network.drgRouteDistribution
+  // Static and dynamic route rules
+  rules() []oci.network.drgRouteTable.rule
+  // Route table creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) DRG route rule
+private oci.network.drgRouteTable.rule @defaults("destination routeType nextHopDrgAttachment.name") {
+  // Route rule ID
+  id string
+  // Destination CIDR block
+  destination string
+  // Destination type, for example CIDR_BLOCK
+  destinationType string
+  // Route type: STATIC or DYNAMIC
+  routeType string
+  // Where a dynamic route was learned, for example IPSEC_TUNNEL or VIRTUAL_CIRCUIT; empty for static routes
+  routeProvenance string
+  // Whether the route conflicts with another and is not used
+  isConflict bool
+  // Whether matching traffic is dropped
+  isBlackhole bool
+  // DRG attachment traffic for the destination is sent to
+  nextHopDrgAttachment() oci.network.drgAttachment
+}
+
+// Oracle Cloud Infrastructure (OCI) DRG route distribution
+//
+// A set of ordered statements that decide which routes a dynamic routing
+// gateway imports into a route table or exports, keyed by its OCID. Each
+// statement accepts the routes of the attachments its match criteria select.
+private oci.network.drgRouteDistribution @defaults("name distributionType") {
+  // Route distribution OCID
+  id string
+  // Route distribution display name
+  name string
+  // Compartment containing the route distribution
+  compartment() oci.compartment
+  // DRG the route distribution belongs to
+  drg() oci.network.drg
+  // Distribution type: IMPORT or EXPORT
+  distributionType string
+  // Lifecycle state, for example AVAILABLE
+  state string
+  // Statements in priority order
+  statements() []oci.network.drgRouteDistribution.statement
+  // Route distribution creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) DRG route distribution statement
+private oci.network.drgRouteDistribution.statement @defaults("priority action matchType") {
+  // Statement ID
+  id string
+  // Action: ACCEPT
+  action string
+  // Priority; lower numbers are evaluated first
+  priority int
+  // What the statement matches: DRG_ATTACHMENT_TYPE, DRG_ATTACHMENT_ID, or MATCH_ALL
+  matchType string
+  // Attachment type a DRG_ATTACHMENT_TYPE statement matches, for example VCN or IPSEC_TUNNEL
+  matchAttachmentType string
+  // DRG attachment a DRG_ATTACHMENT_ID statement matches; null for other match types
+  matchDrgAttachment() oci.network.drgAttachment
+}
+
+// Oracle Cloud Infrastructure (OCI) virtual test access point
+//
+// A VTAP that mirrors the traffic of a source (a VNIC, subnet, load balancer,
+// or database) to a target, keyed by its OCID, through a capture filter. An
+// unexpected VTAP copies traffic out of a network, so `isVtapEnabled`,
+// `targetVnic`, `targetNetworkLoadBalancer`, and `targetIp` show where
+// mirrored traffic goes.
+private oci.network.vtap @defaults("name isVtapEnabled sourceType targetType") {
+  // VTAP OCID
+  id string
+  // VTAP display name
+  name string
+  // Compartment containing the VTAP
+  compartment() oci.compartment
+  // VCN the VTAP belongs to
+  vcn() oci.network.vcn
+  // Lifecycle state, for example AVAILABLE
+  state string
+  // Whether the VTAP is mirroring traffic
+  isVtapEnabled bool
+  // Kind of source mirrored, for example VNIC, SUBNET, LOAD_BALANCER, DB_SYSTEM, EXADATA_VM_CLUSTER, AUTONOMOUS_DATA_WAREHOUSE, or NETWORK_FIREWALL
+  sourceType string
+  // OCID of the mirrored source
+  //
+  // Kept beside the typed source accessors for the source types the provider does not model, such as EXADATA_VM_CLUSTER.
+  sourceId string
+  // Mirrored VNIC; null unless sourceType is VNIC
+  sourceVnic() oci.compute.vnic
+  // Mirrored subnet; null unless sourceType is SUBNET
+  sourceSubnet() oci.network.subnet
+  // Mirrored load balancer; null unless sourceType is LOAD_BALANCER
+  sourceLoadBalancer() oci.loadBalancer.loadBalancer
+  // Mirrored DB system; null unless sourceType is DB_SYSTEM
+  sourceDbSystem() oci.database.dbSystem
+  // Mirrored Autonomous Database; null unless sourceType is AUTONOMOUS_DATA_WAREHOUSE
+  sourceAutonomousDatabase() oci.database.autonomousDatabase
+  // Mirrored network firewall; null unless sourceType is NETWORK_FIREWALL
+  sourceNetworkFirewall() oci.networkFirewall.firewall
+  // Kind of target the mirrored traffic is sent to: VNIC, NETWORK_LOAD_BALANCER, or IP_ADDRESS
+  targetType string
+  // OCID of the target; null for an IP_ADDRESS target
+  //
+  // Kept beside the typed target accessors; an IP_ADDRESS target is reported in targetIp.
+  targetId string
+  // VNIC the mirrored traffic is sent to; null unless targetType is VNIC
+  targetVnic() oci.compute.vnic
+  // Network load balancer the mirrored traffic is sent to; null unless targetType is NETWORK_LOAD_BALANCER
+  targetNetworkLoadBalancer() oci.networkLoadBalancer.loadBalancer
+  // IP address the mirrored traffic is sent to
+  targetIp string
+  // Mirrored traffic: DEFAULT (all packets) or PRIORITY
+  trafficMode string
+  // Encapsulation protocol of mirrored traffic, for example VXLAN
+  encapsulationProtocol string
+  // Maximum size of a mirrored packet in bytes
+  maxPacketSize int
+  // Capture filter selecting the mirrored traffic
+  captureFilter() oci.network.captureFilter
+  // VTAP creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) capture filter
+//
+// A set of rules selecting the traffic a VTAP mirrors or a flow log records,
+// keyed by its OCID, with the direction, action, CIDR blocks, and protocol of
+// each rule.
+private oci.network.captureFilter @defaults("name filterType") {
+  // Capture filter OCID
+  id string
+  // Capture filter display name
+  name string
+  // Compartment containing the capture filter
+  compartment() oci.compartment
+  // Filter type: VTAP or FLOWLOG
+  filterType string
+  // Lifecycle state, for example AVAILABLE
+  state string
+  // Rules in order
+  rules() []oci.network.captureFilter.rule
+  // Capture filter creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) capture filter rule
+private oci.network.captureFilter.rule @defaults("action direction sourceCidr destinationCidr protocol") {
+  // Action: INCLUDE or EXCLUDE
+  action string
+  // Traffic direction of a VTAP rule: INGRESS or EGRESS; empty for flow log rules
+  direction string
+  // Source CIDR block; empty matches any
+  sourceCidr string
+  // Destination CIDR block; empty matches any
+  destinationCidr string
+  // IP protocol number, or all
+  protocol string
+  // Whether a flow log rule is enabled; true for VTAP rules
+  isEnabled bool
+  // Priority of a flow log rule; null for VTAP rules
+  priority int
+  // Sampling rate of a flow log rule, one in this many packets; null for VTAP rules
+  samplingRate int
+}
+
+// Oracle Cloud Infrastructure (OCI) cross-connect group
+//
+// A link aggregation group of FastConnect cross-connects, keyed by its OCID,
+// with its MACsec encryption state and cipher and whether unencrypted traffic
+// is still allowed, and its member cross-connects. Use it to verify that
+// dedicated links into OCI are encrypted.
+private oci.network.crossConnectGroup @defaults("name macsecState") {
+  // Cross-connect group OCID
+  id string
+  // Cross-connect group display name
+  name string
+  // Compartment containing the group
+  compartment() oci.compartment
+  // Lifecycle state, for example PROVISIONED
+  state string
+  // Reference name the customer gave the group
+  customerReferenceName string
+  // MACsec state: ENABLED or DISABLED; empty when MACsec is not configured
+  macsecState string
+  // MACsec encryption cipher, for example AES256_GCM_XPN
+  macsecEncryptionCipher string
+  // Whether unencrypted traffic is allowed while MACsec is enabled
+  macsecIsUnprotectedTrafficAllowed bool
+  // Minimum number of active links for the group to stay up
+  minimumLinks int
+  // Cross-connects in the group
+  crossConnects() []oci.network.crossConnect
+  // Group creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) identity domain user credential
+//
+// A credential of an identity domain user: an API key, auth token, customer
+// secret key, OAuth 2.0 client credential, SMTP credential, or database
+// credential, with its status, creation time, and expiry. Use it to find
+// credentials older than a rotation period or that never expire. Secret values
+// are never read.
+private oci.identity.domain.user.credential @defaults("type name status created") {
+  // Credential ID within the domain
+  id string
+  // Credential OCID
+  ocid string
+  // Credential type: apiKey, authToken, customerSecretKey, oauth2ClientCredential, smtpCredential, or dbCredential
+  type string
+  // Credential name or description
+  name string
+  // Status: ACTIVE or INACTIVE; empty for API keys
+  status string
+  // Fingerprint of an API key's public key; empty for other types
+  fingerprint string
+  // Creation time
+  created time
+  // Expiry time; null when the credential does not expire
+  expiresOn time
+}
+
+// Oracle Cloud Infrastructure (OCI) identity domain dynamic resource group
+//
+// A group whose members are resources, such as instances or functions, that
+// match its rule, so IAM policies can grant those resources permissions. A
+// broad `matchingRule` grants every matching resource the group's access.
+private oci.identity.domain.dynamicResourceGroup @defaults("displayName matchingRule") {
+  // Group ID within the domain
+  id string
+  // Group OCID
+  ocid string
+  // Group display name
+  displayName string
+  // Group description
+  description string
+  // Rule selecting the member resources, for example ALL {instance.compartment.id = 'ocid1...'}
+  matchingRule string
+  // Creation time
+  created time
+}
+
+// Oracle Cloud Infrastructure (OCI) identity domain social identity provider
+//
+// A social identity provider, such as Google or Facebook, that users of the
+// domain can sign in with, with whether it is enabled, shown on the sign-in
+// page, allowed to register new users, and allowed to link existing accounts.
+private oci.identity.domain.socialIdentityProvider @defaults("name serviceProviderName enabled") {
+  // Provider ID within the domain
+  id string
+  // Provider name
+  name string
+  // Social service the provider signs in with, for example Google or Facebook
+  serviceProviderName string
+  // Whether the provider is enabled
+  enabled bool
+  // Whether the provider is shown on the sign-in page
+  showOnLogin bool
+  // Whether users who sign in with the provider are registered automatically
+  registrationEnabled bool
+  // Whether users can link the provider's account to an existing account
+  accountLinkingEnabled bool
+  // Whether users are provisioned just in time on first sign-in
+  jitProvisioningEnabled bool
+  // Status, for example created or deleted
+  status string
+}
+
+// Oracle Cloud Infrastructure (OCI) Object Storage lifecycle rule
+private oci.objectStorage.bucket.lifecycleRule @defaults("name action target timeAmount timeUnit isEnabled") {
+  // Rule name
+  name string
+  // Action: ARCHIVE, INFREQUENT_ACCESS, DELETE, or ABORT
+  action string
+  // What the rule applies to: objects, previous-object-versions, or multipart-uploads
+  target string
+  // Age after which the action applies
+  timeAmount int
+  // Unit of timeAmount: DAYS or YEARS
+  timeUnit string
+  // Whether the rule is enabled
+  isEnabled bool
+  // Object name prefixes the rule is limited to; empty applies it to every object
+  inclusionPrefixes []string
+}
+
+// Oracle Cloud Infrastructure (OCI) Object Storage replication policy
+private oci.objectStorage.bucket.replicationPolicy @defaults("name destinationRegion destinationBucketName status") {
+  // Replication policy ID
+  id string
+  // Replication policy name
+  name string
+  // Region of the destination bucket
+  destinationRegion string
+  // Name of the destination bucket
+  destinationBucketName string
+  // Replication status: ACTIVE or CLIENT_ERROR
+  status string
+  // Reason for a CLIENT_ERROR status
+  statusMessage string
+  // Time the policy was created
+  created time
+  // Time up to which objects have been replicated
+  lastSync time
+}
+
+// Oracle Cloud Infrastructure (OCI) vault replica
+private oci.kms.vault.replica @defaults("region status") {
+  // Region of the replica
+  region string
+  // Replica status, for example CREATED
+  status string
+  // Crypto endpoint of the replica
+  cryptoEndpoint string
+  // Management endpoint of the replica
+  managementEndpoint string
+}
+
+// Oracle Cloud Infrastructure (OCI) Cloud Guard managed list
+//
+// A list of values, such as CIDR blocks, users, groups, or regions, that
+// detector rules use to include or exclude findings, keyed by its OCID. An
+// entry here can silence a detector, so `listItems` shows what is trusted.
+// Lists provided by Oracle have `feedProvider` ORACLE and cannot be edited.
+private oci.cloudGuard.managedList @defaults("name listType feedProvider") {
+  // Managed list OCID
+  id string
+  // Managed list display name
+  name string
+  // Managed list description
+  description string
+  // Compartment containing the list
+  compartment() oci.compartment
+  // Type of the values, for example CIDR_BLOCK, USERS, GROUPS, IPV4ADDRESS, or REGION
+  listType string
+  // Who provides the list: ORACLE or CUSTOMER
+  feedProvider string
+  // Values in the list
+  listItems []string
+  // Whether the list can be edited
+  isEditable bool
+  // Lifecycle state, for example ACTIVE
+  state string
+  // Creation time
+  created time
+  // Free-form tags for resource management
+  freeformTags map[string]string
+  // Defined tags for governance and cost tracking
+  definedTags map[string]map[string]string
+}
+
+// Oracle Cloud Infrastructure (OCI) Bastion session
+//
+// A session of a bastion, keyed by its OCID: managed SSH to an instance, port
+// forwarding to a private IP address and port, or dynamic port forwarding
+// (a SOCKS proxy into the target subnet), with its target, operating system
+// user, time to live, and state.
+private oci.bastion.session @defaults("name sessionType state") {
+  // Session OCID
+  id string
+  // Session display name
+  name string
+  // Session type: MANAGED_SSH, PORT_FORWARDING, or DYNAMIC_PORT_FORWARDING
+  sessionType string
+  // Lifecycle state: CREATING, ACTIVE, DELETING, DELETED, or FAILED
+  state string
+  // Time to live of the session in seconds
+  ttlInSeconds int
+  // Instance the session connects to; null when the target is an IP address or the session is dynamic port forwarding
+  targetInstance() oci.compute.instance
+  // Private IP address the session connects to
+  targetPrivateIp string
+  // Port the session connects to; null for dynamic port forwarding
+  targetPort int
+  // Operating system user of a managed SSH session; empty for other session types
+  targetUser string
+  // Creation time
+  created time
 }
