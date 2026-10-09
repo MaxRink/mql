@@ -244,3 +244,38 @@ func TestParseLinuxFind(t *testing.T) {
 	require.Equal(t, int64(1), pid)
 	require.Equal(t, int64(18472), inode)
 }
+
+// testdata/aix73.toml is ps with the state column on AIX 7.3 TL4 SP2, cut to
+// its first 28 processes, plus a zombie, whose other columns AIX leaves blank.
+func TestAixProcessManagerState(t *testing.T) {
+	conn, err := mock.New(0, &inventory.Asset{
+		Platform: &inventory.Platform{Name: "aix", Family: []string{"unix", "os"}},
+	}, mock.WithPath("./testdata/aix73.toml"))
+	require.NoError(t, err)
+
+	pm, err := processes.ResolveManager(conn)
+	require.NoError(t, err)
+	procs, err := pm.List()
+	require.NoError(t, err)
+	assert.Len(t, procs, 28)
+
+	var init *processes.OSProcess
+	for _, p := range procs {
+		if p.Pid == 1 {
+			init = p
+		}
+	}
+	require.NotNil(t, init)
+	assert.Equal(t, "/etc/init", init.Command)
+	assert.Equal(t, "A (active)", init.State)
+}
+
+func TestAixPSProcessParserKeepsCommandsNamedDefunct(t *testing.T) {
+	input := "     PID  %CPU  %MEM   VSZ     TT        TIME   UID S COMMAND\n" +
+		" 1638710                             00:00:00       Z <defunct>\n" +
+		" 4242424   0.0   0.0   512      -    00:00:00     0 A /usr/local/bin/cleanup_defunct_users.sh\n"
+	procs, err := processes.ParseAixPsResult(strings.NewReader(input))
+	require.NoError(t, err)
+	require.Len(t, procs, 1)
+	assert.Equal(t, "/usr/local/bin/cleanup_defunct_users.sh", procs[0].Command)
+}
