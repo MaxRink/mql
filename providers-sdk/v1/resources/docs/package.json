@@ -12,7 +12,7 @@
     "@babel/preset-env": "^7.6.2",
     "@babel/preset-react": "^7.0.0",
     "@types/react-dom": "^16.9.1",
-    "@types/styled-components": "^4.1.19",
+    "@types/styled-components": "^5.1.36",
     "autoprefixer": "^9.6.1",
     "babel-plugin-inline-import": "^3.0.0",
     "babel-plugin-postcssstring": "https://github.com/arlimus/babel-plugin-postcssstring",
