@@ -21,3 +21,147 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+  - package-ecosystem: devcontainers
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      routine-updates:
+        patterns:
+        - '*'
+        update-types:
+        - minor
+        - patch
+  - package-ecosystem: docker
+    directory: /.devcontainer
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      routine-updates:
+        patterns:
+        - '*'
+        update-types:
+        - minor
+        - patch
+  - package-ecosystem: github-actions
+    directory: /.github/actions/setup-protoc
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      routine-updates:
+        patterns:
+        - '*'
+        update-types:
+        - minor
+        - patch
+  - package-ecosystem: gomod
+    directories:
+    - /
+    - /providers/activedirectory
+    - /providers/alicloud
+    - /providers/ansible
+    - /providers/arista
+    - /providers/artifactory
+    - /providers/atlassian
+    - /providers/auth0
+    - /providers/aws
+    - /providers/azure
+    - /providers/azuredevops
+    - /providers/bicep
+    - /providers/bitwarden
+    - /providers/cassandra
+    - /providers/claude
+    - /providers/clickhousecloud
+    - /providers/clickhousedb
+    - /providers/cloudflare
+    - /providers/cloudformation
+    - /providers/cockroachdb
+    - /providers/databricks
+    - /providers/datadog
+    - /providers/depsdev
+    - /providers/digitalocean
+    - /providers/dropbox
+    - /providers/elasticsearch
+    - /providers/exoscale
+    - /providers/gcp
+    - /providers/github
+    - /providers/gitlab
+    - /providers/google-workspace
+    - /providers/grafana
+    - /providers/hcp
+    - /providers/helm
+    - /providers/hetzner
+    - /providers/huggingface
+    - /providers/ibm
+    - /providers/ipinfo
+    - /providers/ipmi
+    - /providers/iru
+    - /providers/jamf
+    - /providers/jumpcloud
+    - /providers/k8s
+    - /providers/keycloak
+    - /providers/kustomize
+    - /providers/mikrotik
+    - /providers/mistral
+    - /providers/mondoo
+    - /providers/mongo
+    - /providers/mongodbatlas
+    - /providers/ms365
+    - /providers/mssql
+    - /providers/mysqldb
+    - /providers/neon
+    - /providers/netlify
+    - /providers/nextdns
+    - /providers/nmap
+    - /providers/notion
+    - /providers/nutanix
+    - /providers/oci
+    - /providers/okta
+    - /providers/ollama
+    - /providers/opcua
+    - /providers/openai
+    - /providers/opensearch
+    - /providers/openstack
+    - /providers/portainer
+    - /providers/postgresdb
+    - /providers/proxmox
+    - /providers/redfish
+    - /providers/redisdb
+    - /providers/shodan
+    - /providers/slack
+    - /providers/snowflake
+    - /providers/stackit
+    - /providers/tailscale
+    - /providers/terraform
+    - /providers/together
+    - /providers/vcd
+    - /providers/vercel
+    - /providers/vllm
+    - /providers/vsphere
+    - /providers/weaviate
+    - /providers/zoom
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      routine-updates:
+        patterns:
+        - '*'
+        update-types:
+        - minor
+        - patch
+  - package-ecosystem: npm
+    directory: /providers-sdk/v1/resources/docs
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      routine-updates:
+        patterns:
+        - '*'
+        update-types:
+        - minor
+        - patch
