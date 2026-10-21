@@ -29,7 +29,7 @@
   "dependencies": {
     "normalize.css": "^8.0.1",
     "react": "^16.13.1",
-    "react-dom": "^16.13.1",
+    "react-dom": "^19.3.1",
     "styled-components": "^5.1.0",
     "whatwg-fetch": "^3.0.0"
   }
