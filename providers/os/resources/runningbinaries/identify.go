@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/spf13/afero"
+	"go.mondoo.com/mql/providers/os/resources/packages"
 	"golang.org/x/mod/module"
 	"howett.net/plist"
 )
@@ -241,6 +242,22 @@ func Identify(fs afero.Fs, b Binary) Identity {
 		if v, ok := scanVersionString(fs, b, runtime.versionString(fileName)); ok {
 			id.Version = v
 			id.VersionSource = SourceVersionString
+		}
+	}
+
+	// MariaDB 10.0 and later and XAMPP's MariaDB 10.1 still run as mysqld.
+	// The same rules as the Windows package scan decide: the version
+	// resource's product name first, then the version (MySQL went from 5.7 to
+	// 8.0). A mysqld they can't classify stays mysql. The mariadbd.exe sibling
+	// the package scan also uses is not looked at here, since mariadbd is its
+	// own known runtime.
+	if runtime != nil && runtime.name == "mysql" {
+		productName := ""
+		if b.VersionInfo != nil {
+			productName = b.VersionInfo.ProductName
+		}
+		if mariadb, ok := packages.IsMariaDBServer(productName, id.Version); ok && mariadb {
+			id.Name = "mariadb"
 		}
 	}
 
