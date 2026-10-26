@@ -10,11 +10,12 @@ replace github.com/apache/thrift => github.com/apache/thrift v0.22.0
 go 1.27.3
 
 require (
+	// pin main
 	github.com/Snowflake-Labs/terraform-provider-snowflake v1.2.2-0.20261013103929-accf5ace6131
 	github.com/rs/zerolog v1.35.1
 	github.com/snowflakedb/gosnowflake/v2 v2.3.0
 	github.com/stretchr/testify v1.12.1
-	go.mondoo.com/mql v0.0.0-20261024173047-83cc7347d76d
+	go.mondoo.com/mql v0.0.0-20261026054543-00c16ca67199
 	go.mondoo.com/ranger-rpc v0.8.1
 	golang.org/x/crypto v0.58.0
 )
