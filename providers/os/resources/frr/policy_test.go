@@ -291,3 +291,13 @@ bgp community-list expanded FOO permit ^65000:
 	assert.Equal(t, "expanded", lists[1].Type)
 	assert.Equal(t, "^65000:", lists[1].Entries[0].Value)
 }
+
+// TestRouteMapClauses_AdditiveIsNotAValue pins that `additive` on a large or
+// extended community set is a keyword, not a community.
+func TestRouteMapClauses_AdditiveIsNotAValue(t *testing.T) {
+	var c RouteMapClauses
+	c.applySet([]string{"large-community", "65100:1:3", "additive"})
+	c.applySet([]string{"extcommunity", "rt", "65100:5010", "additive"})
+	assert.Equal(t, []string{"65100:1:3"}, c.SetLargeCommunities)
+	assert.Equal(t, []string{"rt 65100:5010"}, c.SetExtCommunities)
+}

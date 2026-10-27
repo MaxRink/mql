@@ -534,6 +534,18 @@ func (c *RouteMapClauses) applyMatch(args []string) {
 	}
 }
 
+// withoutAdditive drops the `additive` keyword, which says how the values
+// combine with the ones the route carries and is not a value itself.
+func withoutAdditive(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if v != "additive" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 func (c *RouteMapClauses) applySet(args []string) {
 	if len(args) == 0 {
 		return
@@ -552,9 +564,9 @@ func (c *RouteMapClauses) applySet(args []string) {
 			}
 		}
 	case "large-community":
-		c.SetLargeCommunities = append(c.SetLargeCommunities, args[1:]...)
+		c.SetLargeCommunities = append(c.SetLargeCommunities, withoutAdditive(args[1:])...)
 	case "extcommunity":
-		c.SetExtCommunities = append(c.SetExtCommunities, strings.Join(args[1:], " "))
+		c.SetExtCommunities = append(c.SetExtCommunities, strings.Join(withoutAdditive(args[1:]), " "))
 	case "comm-list":
 		// `set comm-list <name> delete`
 		if len(args) > 1 {
