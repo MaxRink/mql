@@ -175,8 +175,14 @@ func TestDiscoverStagedKyvernoRemovesTargetFromNamespaceAssets(t *testing.T) {
 	inv, err := Discover(pluginRuntime, mql.Features{})
 	require.NoError(t, err)
 	require.Len(t, inv.Spec.Assets, 2)
-	assert.Empty(t, inv.Spec.Assets[0].Connections[0].Discover.Targets)
-	assert.Equal(t, []string{DiscoveryPods}, inv.Spec.Assets[1].Connections[0].Discover.Targets)
+	byName := map[string]*inventory.Asset{}
+	for _, a := range inv.Spec.Assets {
+		byName[a.Name] = a
+	}
+	require.Contains(t, byName, asset.Name)
+	require.Contains(t, byName, "team-a")
+	assert.Empty(t, byName[asset.Name].Connections[0].Discover.Targets)
+	assert.Equal(t, []string{DiscoveryPods}, byName["team-a"].Connections[0].Discover.Targets)
 }
 
 func newTestNamespace(name, uid string) corev1.Namespace {

@@ -348,6 +348,11 @@ func discoverClusterStage(runtime *plugin.Runtime, conn shared.Connection, invCo
 		}
 	}
 
+	// Kyverno-only discovery without namespace or label filters needs nothing
+	// beyond the cluster root, so namespace discovery, inherited labels and image
+	// filters below are skipped. Any target that needs them (e.g. container
+	// images with inherited labels) lands in namespaceTargets and disables this
+	// early return.
 	namespaceTargets := discoveryTargetsWithout(invConfig.Discover.Targets, DiscoveryKyverno)
 	if discoverKyverno && len(namespaceTargets) == 0 && len(nsFilter.include) == 0 && len(nsFilter.exclude) == 0 && labelFilters.IsEmpty() {
 		return in, nil
