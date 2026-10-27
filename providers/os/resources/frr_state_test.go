@@ -14,6 +14,7 @@ import (
 	"go.mondoo.com/mql/llx"
 	"go.mondoo.com/mql/providers-sdk/v1/plugin"
 	"go.mondoo.com/mql/providers/os/connection/shared"
+	"go.mondoo.com/mql/providers/os/resources/frr"
 )
 
 // frrCmdConn answers a fixed set of commands, so the runtime accessors can
@@ -158,4 +159,25 @@ func TestRouteTableResourcesWithDifferentLimitsAreNotReused(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotSame(t, first, second)
 	assert.NotEqual(t, first.MqlID(), second.MqlID())
+}
+
+// Synthetic: a rule list before and after an earlier rule at the same
+// priority is removed; no target showed this. The id of a rule must not
+// depend on its position, and two identical rules must still differ.
+func TestFrrRuleIDsDoNotDependOnPosition(t *testing.T) {
+	newRuntime := func() *plugin.Runtime {
+		return plugin.NewRuntime(nil, nil, false, nil, nil, nil, nil, nil)
+	}
+	blue := frr.RoutingRule{Priority: 1000, L3mdev: true}
+	tenant := frr.RoutingRule{Priority: 1000, Source: "10.0.0.0/8", Table: "1005", TableID: 1005}
+
+	before, err := createFrrRules(newRuntime(), "frr.routingRules", []frr.RoutingRule{blue, tenant, tenant})
+	require.NoError(t, err)
+	after, err := createFrrRules(newRuntime(), "frr.routingRules", []frr.RoutingRule{tenant, tenant})
+	require.NoError(t, err)
+
+	id := func(r any) string { return r.(*mqlFrrRoutingRule).MqlID() }
+	assert.Equal(t, id(before[1]), id(after[0]))
+	assert.Equal(t, id(before[2]), id(after[1]))
+	assert.NotEqual(t, id(before[1]), id(before[2]))
 }

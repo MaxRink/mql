@@ -216,9 +216,15 @@ func (n *mqlFrr) routingRules() ([]any, error) {
 // unique between the global list and the per VRF lists.
 func createFrrRules(runtime *plugin.Runtime, prefix string, rules []frr.RoutingRule) ([]any, error) {
 	res := make([]any, 0, len(rules))
+	seen := map[string]int{}
 	for i := range rules {
 		r := &rules[i]
-		id := fmt.Sprintf("%s/%d/%d", prefix, r.Priority, i)
+		// The id is built from what defines the rule, not from its position,
+		// so removing another rule does not renumber this one. Linux allows
+		// several rules at one priority, which the selectors tell apart.
+		id := uniqueFrrID(seen, fmt.Sprintf("%s/%d/%s/%s/%s/%s/%s/%s/%s/%t/%t",
+			prefix, r.Priority, r.Source, r.Dest, r.Table, r.InputIf, r.OutputIf,
+			r.FwMark, r.Action, r.L3mdev, r.Invert))
 		obj, err := CreateResource(runtime, "frr.routingRule", map[string]*llx.RawData{
 			"__id":                 llx.StringData(id),
 			"priority":             llx.IntData(r.Priority),
@@ -654,6 +660,7 @@ func (s *mqlFrrRouteTable) entries() ([]any, error) {
 	}
 
 	res := make([]any, 0, len(table.Entries))
+	seen := map[string]int{}
 	for i := range table.Entries {
 		e := &table.Entries[i]
 		nexthops := make([]any, 0, len(e.Nexthops))
@@ -669,7 +676,17 @@ func (s *mqlFrrRouteTable) entries() ([]any, error) {
 			})
 		}
 
-		id := fmt.Sprintf("%s/%d/%s/%s", s.__id, i, e.Prefix, e.Protocol)
+		// The id is built from what defines the route, not from its position
+		// in the table, so a route added or withdrawn elsewhere does not
+		// renumber this one. ECMP paths sit in the nexthop list of one entry,
+		// and entries of one prefix and protocol differ by distance, metric
+		// or nexthops.
+		hops := make([]string, 0, len(e.Nexthops))
+		for j := range e.Nexthops {
+			hops = append(hops, e.Nexthops[j].IP+"%"+e.Nexthops[j].Interface)
+		}
+		id := uniqueFrrID(seen, fmt.Sprintf("%s/%s/%s/%d/%d/%s",
+			s.__id, e.Prefix, e.Protocol, e.Distance, e.Metric, strings.Join(hops, ",")))
 		obj, err := CreateResource(s.MqlRuntime, "frr.route", map[string]*llx.RawData{
 			"__id":         llx.StringData(id),
 			"prefix":       llx.StringData(e.Prefix),
@@ -690,4 +707,16 @@ func (s *mqlFrrRouteTable) entries() ([]any, error) {
 		res = append(res, obj)
 	}
 	return res, nil
+}
+
+// uniqueFrrID returns key, or key with an occurrence suffix when the same
+// key was already handed out. Only entries that are identical in every field
+// of the key get the suffix, so it does not depend on the other entries.
+func uniqueFrrID(seen map[string]int, key string) string {
+	n := seen[key]
+	seen[key] = n + 1
+	if n == 0 {
+		return key
+	}
+	return key + "#" + strconv.Itoa(n)
 }
