@@ -37,6 +37,7 @@ func interfaceFor(ifaces []Interface, name string) *Interface {
 	return nil
 }
 
+// Synthetic: OSPF and OSPFv3 instances with a passive default, an exemption and an authenticated backbone, from the hand-written frr-daemons.conf; no target showed this.
 func TestOSPFInstances(t *testing.T) {
 	cfg := parseFixture(t, "frr-daemons.conf")
 	instances := cfg.OSPFInstances()
@@ -88,6 +89,7 @@ func TestOSPFInstances(t *testing.T) {
 	assert.Equal(t, "192.0.2.30", v3.RouterID)
 }
 
+// Synthetic: an IS-IS instance with area and domain passwords, from the hand-written frr-daemons.conf; no target showed this.
 func TestISISInstances(t *testing.T) {
 	cfg := parseFixture(t, "frr-daemons.conf")
 	instances := cfg.ISISInstances()
@@ -108,6 +110,7 @@ func TestISISInstances(t *testing.T) {
 	assert.Equal(t, []string{"ipv4 connected level-2"}, s.Redistribute)
 }
 
+// Synthetic: BFD peers and profiles with set and unset timers, from the hand-written frr-daemons.conf; no target showed this.
 func TestBFDPeers(t *testing.T) {
 	cfg := parseFixture(t, "frr-daemons.conf")
 	peers := cfg.BFDPeers()
@@ -141,6 +144,7 @@ func TestBFDPeers(t *testing.T) {
 	assert.Equal(t, int64(-1), multi.DetectMultiplier)
 }
 
+// Synthetic: a policy routing map that moves traffic into another VRF, from the hand-written frr-daemons.conf; no target showed this.
 func TestPBRMaps(t *testing.T) {
 	cfg := parseFixture(t, "frr-daemons.conf")
 	maps := cfg.PBRMaps()
@@ -164,6 +168,7 @@ func TestPBRMaps(t *testing.T) {
 	assert.Equal(t, int64(1005), second.Table)
 }
 
+// Synthetic: a segment routing block with SRv6 locators, and a config without one, from hand-written fixtures; no target showed this.
 func TestSegmentRouting(t *testing.T) {
 	cfg := parseFixture(t, "frr-daemons.conf")
 	sr, ok := cfg.SegmentRoutingBlock()
@@ -179,6 +184,8 @@ func TestSegmentRouting(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// Synthetic: interface OSPF, IS-IS, PIM, IGMP and BFD settings, set and unset, from the hand-written frr-daemons.conf; no target showed this.
+//
 // TestInterfaceProtocols covers the link settings of the interior gateway
 // protocols. An interface without authentication accepts an adjacency from
 // anything on the link.
@@ -220,6 +227,8 @@ func TestInterfaceProtocols(t *testing.T) {
 	assert.Equal(t, "", lo.Protocols.OSPFAuthentication)
 }
 
+// Synthetic: logging, shell passwords and the SNMP agent, present and absent, from hand-written fixtures; no target showed this.
+//
 // TestServiceSettings covers the daemon-wide settings, which decide who
 // reaches the shell and what the router records.
 func TestServiceSettings(t *testing.T) {
@@ -256,6 +265,8 @@ func TestServiceSettings(t *testing.T) {
 	assert.Len(t, ps.LogTargets, 2)
 }
 
+// Synthetic: the nested segment routing tree terminated only by exit, from the hand-written frr-daemons.conf; no target showed this.
+//
 // TestParse_SegmentRoutingNesting pins the nesting of the segment routing
 // tree, which is several levels deep and terminated only by `exit`.
 func TestParse_SegmentRoutingNesting(t *testing.T) {
