@@ -228,6 +228,16 @@ func (s *mqlFrrConfig) markParseErrors(err error) {
 	s.CommunityLists = arrVal
 	s.AccessLists = arrVal
 	s.AsPathAccessLists = arrVal
+	s.Ospf = arrVal
+	s.Isis = arrVal
+	s.BfdPeers = arrVal
+	s.PbrMaps = arrVal
+	s.SegmentRouting = plugin.TValue[*mqlFrrConfigSegmentRoutingSettings]{
+		Error: err, State: plugin.StateIsSet | plugin.StateIsNull,
+	}
+	s.Service = plugin.TValue[*mqlFrrConfigServiceSettings]{
+		Error: err, State: plugin.StateIsSet | plugin.StateIsNull,
+	}
 }
 
 func (s *mqlFrrConfig) hostname(file *mqlFile) (string, error) {
@@ -495,7 +505,7 @@ func (s *mqlFrrConfig) interfaces(file *mqlFile) ([]any, error) {
 	res := make([]any, 0, len(ifaces))
 	for i := range ifaces {
 		iface := &ifaces[i]
-		obj, err := CreateResource(s.MqlRuntime, "frr.config.interface", map[string]*llx.RawData{
+		ifaceArgs := map[string]*llx.RawData{
 			"__id":          llx.StringData(s.__id + "#interface/" + iface.Name + "/" + iface.VRF),
 			"name":          llx.StringData(iface.Name),
 			"vrf":           llx.StringData(iface.VRF),
@@ -508,7 +518,10 @@ func (s *mqlFrrConfig) interfaces(file *mqlFile) ([]any, error) {
 			"file":          llx.StringData(iface.File),
 			"startLine":     llx.IntData(int64(iface.StartLine)),
 			"raw":           llx.StringData(iface.Raw),
-		})
+		}
+		interfaceProtocolArgs(ifaceArgs, &iface.Protocols)
+
+		obj, err := CreateResource(s.MqlRuntime, "frr.config.interface", ifaceArgs)
 		if err != nil {
 			return nil, err
 		}
