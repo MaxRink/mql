@@ -335,14 +335,16 @@ func blockHeader(fields []string, stack []frame) (string, string, []string, bloc
 		}
 		return "router " + fields[1], name, fields[2:], kindTop, true
 
-	case "vrf", "interface", "route-map", "pbr-map", "nexthop-group",
-		"rpki":
+	case "vrf", "interface", "route-map", "pbr-map", "nexthop-group":
 		if len(fields) < 2 {
 			return "", "", nil, kindTop, false
 		}
 		return fields[0], fields[1], fields[1:], kindTop, true
 
-	case "bfd", "segment-routing":
+	case "bfd", "segment-routing", "rpki":
+		// These take no name of their own and only start a block at the top
+		// level. Inside the rpki block, `rpki cache ...` and
+		// `rpki polling_period ...` are directives.
 		if len(fields) != 1 || len(stack) > 0 {
 			return "", "", nil, kindTop, false
 		}
