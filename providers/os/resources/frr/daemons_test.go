@@ -4,6 +4,7 @@
 package frr
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -282,4 +283,27 @@ func TestParse_SegmentRoutingNesting(t *testing.T) {
 
 	// The block after it is still a top-level block.
 	assert.Nil(t, findBlock(cfg, "locator", "MAIN"))
+}
+
+// Synthetic: password directives with explicit, implicit and absent modes; no target showed this.
+func TestISISPasswordModesDoNotExposeSecrets(t *testing.T) {
+	for _, tc := range []struct {
+		args, mode string
+	}{
+		{"clear private-value", "clear"},
+		{"md5 private-value", "md5"},
+		{"private-value", "clear"},
+		{"", ""},
+	} {
+		t.Run(tc.args, func(t *testing.T) {
+			cfg, err := Parse("frr.conf", strings.NewReader("router isis FABRIC\n area-password "+tc.args+"\n domain-password "+tc.args+"\n!\n"))
+			require.NoError(t, err)
+			instances := cfg.ISISInstances()
+			require.Len(t, instances, 1)
+			assert.True(t, instances[0].AreaPasswordSet)
+			assert.True(t, instances[0].DomainPasswordSet)
+			assert.Equal(t, tc.mode, instances[0].AreaPasswordMode)
+			assert.Equal(t, tc.mode, instances[0].DomainPasswordMode)
+		})
+	}
 }

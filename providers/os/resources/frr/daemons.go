@@ -375,12 +375,18 @@ func buildISIS(blk *Block) ISIS {
 		case "area-password":
 			s.AreaPasswordSet = !d.Negated
 			if len(d.Args) > 0 {
-				s.AreaPasswordMode = d.Args[0]
+				s.AreaPasswordMode = "clear"
+				if d.Args[0] == "clear" || d.Args[0] == "md5" {
+					s.AreaPasswordMode = d.Args[0]
+				}
 			}
 		case "domain-password":
 			s.DomainPasswordSet = !d.Negated
 			if len(d.Args) > 0 {
-				s.DomainPasswordMode = d.Args[0]
+				s.DomainPasswordMode = "clear"
+				if d.Args[0] == "clear" || d.Args[0] == "md5" {
+					s.DomainPasswordMode = d.Args[0]
+				}
 			}
 		case "isis":
 			// `isis authentication <mode>` inside the instance.
